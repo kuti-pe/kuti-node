@@ -1,0 +1,58 @@
+{
+  "name": "@kuti/node",
+  "version": "0.1.0",
+  "description": "SDK oficial de KUTI para Node.js — crea checkout sessions, consulta pagos y verifica webhooks.",
+  "license": "MIT",
+  "author": "KUTI <soporte@kuti.pe> (https://www.kuti.pe)",
+  "homepage": "https://docs.kuti.pe",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kuti-pe/kuti-node.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kuti-pe/kuti-node/issues"
+  },
+  "keywords": [
+    "kuti",
+    "payments",
+    "peru",
+    "yape",
+    "qr",
+    "checkout"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
