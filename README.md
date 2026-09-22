@@ -1,4 +1,4 @@
-# @kuti/node
+# @kuti-pe/node
 
 SDK oficial de KUTI para Node.js. Crea sesiones de checkout, consulta el estado de un pago y verifica webhooks — sin reimplementar auth, manejo de errores ni firma HMAC a mano.
 
@@ -7,13 +7,13 @@ SDK oficial de KUTI para Node.js. Crea sesiones de checkout, consulta el estado 
 ## Instalación
 
 ```bash
-npm install @kuti/node
+npm install @kuti-pe/node
 ```
 
 ## Quickstart
 
 ```ts
-import { KutiClient } from "@kuti/node";
+import { KutiClient } from "@kuti-pe/node";
 
 const kuti = new KutiClient({ secretKey: process.env.KUTI_SECRET_KEY! });
 
@@ -47,7 +47,7 @@ if (intent.status === "SUCCEEDED") {
 ## Verificar un webhook
 
 ```ts
-import { verifyWebhookSignature, KutiSignatureVerificationError } from "@kuti/node";
+import { verifyWebhookSignature, KutiSignatureVerificationError } from "@kuti-pe/node";
 import express from "express";
 
 const app = express();
@@ -78,7 +78,7 @@ app.post("/webhooks/kuti", express.text({ type: "*/*" }), (req, res) => {
 Todas las excepciones de la API extienden `KutiApiError` (`status`, `code`, `requestId`, `docUrl`, `details`). Hay subclases para los casos más comunes:
 
 ```ts
-import { KutiValidationError, KutiNotFoundError, KutiApiError } from "@kuti/node";
+import { KutiValidationError, KutiNotFoundError, KutiApiError } from "@kuti-pe/node";
 
 try {
   await kuti.checkoutSessions.create(params);

@@ -43,7 +43,7 @@ export class KutiClient {
     if (typeof (globalThis as { window?: unknown }).window !== "undefined") {
       throw new Error(
         "KutiClient uses your secret key and must run only on the server. " +
-          "Never import @kuti/node in browser code.",
+          "Never import @kuti-pe/node in browser code.",
       );
     }
     if (!SECRET_KEY_PREFIXES.some((prefix) => options.secretKey.startsWith(prefix))) {

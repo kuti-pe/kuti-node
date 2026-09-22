@@ -1,5 +1,5 @@
 {
-  "name": "@kuti/node",
+  "name": "@kuti-pe/node",
   "version": "1.0.0",
   "description": "SDK oficial de KUTI para Node.js — crea checkout sessions, consulta pagos y verifica webhooks.",
   "license": "MIT",
