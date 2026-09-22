@@ -1,20 +1,33 @@
 import type { KutiClient } from "../client.js";
 import type {
   CreatePaymentIntentParams,
+  ListPaymentIntentsParams,
   PaymentIntent,
+  PaymentIntentList,
   PaymentMethodType,
   RequestOptions,
+  SendWhatsAppParams,
 } from "../types.js";
 
 interface PaymentIntentEnvelope {
   data: PaymentIntentApiShape;
 }
 
+interface PaymentIntentPageEnvelope {
+  data: PaymentIntentApiShape[];
+  pagination: {
+    page: number;
+    per_page: number;
+    total: number;
+    total_pages: number;
+    has_more: boolean;
+  };
+}
+
 interface PaymentIntentApiShape {
   id: string;
   merchant_id: string;
   livemode?: boolean;
-  /** Legacy / flat — la API actual usa `customer.id`. */
   customer_id?: string;
   customer?: { id?: string };
   amount: PaymentIntent["amount"];
@@ -38,10 +51,7 @@ interface PaymentIntentApiShape {
 export class PaymentIntentsResource {
   constructor(private readonly client: KutiClient) {}
 
-  /**
-   * Crea un payment intent (cobro). Devuelve QR, código de pago de servicios y checkout_url.
-   * El monto SIEMPRE debe resolverse en tu backend. Pasa `idempotencyKey` para no duplicar cobros.
-   */
+  /** POST /payment-intents — QR, bank code, checkoutUrl. */
   async create(params: CreatePaymentIntentParams, opts?: RequestOptions): Promise<PaymentIntent> {
     const body = {
       amount: params.amount,
@@ -61,7 +71,6 @@ export class PaymentIntentsResource {
               : undefined,
           }
         : undefined,
-      customer_id: params.customerId,
       receivable_id: params.receivableId,
       category_id: params.categoryId,
       requires_customer_info: params.requiresCustomerInfo,
@@ -81,17 +90,61 @@ export class PaymentIntentsResource {
     return fromApiShape(response.data);
   }
 
-  /**
-   * Consulta el estado real de un cobro. Es la fuente de verdad — nunca confíes en un callback del
-   * frontend (`onSuccess` de KUTI.js) para confirmar un pago; el navegador del comprador se puede
-   * falsificar. Verifica `status === "SUCCEEDED"` aquí antes de entregar un producto o servicio.
-   */
+  /** GET /payment-intents */
+  async list(params: ListPaymentIntentsParams = {}): Promise<PaymentIntentList> {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set("status", params.status);
+    if (params.q) qs.set("q", params.q);
+    if (params.customerId) qs.set("customer_id", params.customerId);
+    if (params.createdFrom) qs.set("created_from", params.createdFrom);
+    if (params.createdTo) qs.set("created_to", params.createdTo);
+    if (params.page != null) qs.set("page", String(params.page));
+    if (params.perPage != null) qs.set("per_page", String(params.perPage));
+    const query = qs.toString();
+    const response = await this.client.request<PaymentIntentPageEnvelope>(
+      "GET",
+      `/payment-intents${query ? `?${query}` : ""}`,
+    );
+    return {
+      data: (response.data ?? []).map(fromApiShape),
+      pagination: {
+        page: response.pagination.page,
+        perPage: response.pagination.per_page,
+        total: response.pagination.total,
+        totalPages: response.pagination.total_pages,
+        hasMore: response.pagination.has_more,
+      },
+    };
+  }
+
+  /** GET /payment-intents/:id */
   async retrieve(id: string): Promise<PaymentIntent> {
     const response = await this.client.request<PaymentIntentEnvelope>(
       "GET",
       `/payment-intents/${encodeURIComponent(id)}`,
     );
     return fromApiShape(response.data);
+  }
+
+  /** POST /payment-intents/:id/cancel */
+  async cancel(id: string): Promise<PaymentIntent> {
+    const response = await this.client.request<PaymentIntentEnvelope>(
+      "POST",
+      `/payment-intents/${encodeURIComponent(id)}/cancel`,
+    );
+    return fromApiShape(response.data);
+  }
+
+  /** POST /payment-intents/:id/send-whatsapp — 204 on success. */
+  async sendWhatsApp(id: string, params: SendWhatsAppParams = {}): Promise<void> {
+    const body: Record<string, string> = {};
+    if (params.phone) body.phone = params.phone;
+    if (params.customerName) body.customer_name = params.customerName;
+    await this.client.request(
+      "POST",
+      `/payment-intents/${encodeURIComponent(id)}/send-whatsapp`,
+      Object.keys(body).length ? body : {},
+    );
   }
 }
 

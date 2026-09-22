@@ -1,7 +1,7 @@
 export interface Money {
-  /** Decimal como string. Nunca float. */
+  /** Decimal string (never float). Currency: PEN only for now. */
   amount: string;
-  currency: string;
+  currency: "PEN" | string;
 }
 
 export type PaymentMethodType = "INTEROPERABLE_QR" | "BANK_TRANSFER";
@@ -18,12 +18,12 @@ export type PaymentIntentStatus =
   | "EXPIRED";
 
 export interface CheckoutSessionCustomer {
-  /** Id de un Customer ya existente (cus_…). Si viene, se ignora el resto. */
+  /** Existing customer (cus_…). If set, other fields are ignored. */
   id?: string;
   externalId?: string;
   name?: string;
   email?: string;
-  /** Formato E.164 (+<código país><número>). */
+  /** E.164 */
   phone?: string;
 }
 
@@ -43,8 +43,8 @@ export interface PaymentIntentCustomerDocument {
   number: string;
 }
 
-/** Cliente del cobro. Si viene `id`, se ignora el resto. */
 export interface PaymentIntentCustomer {
+  /** Existing customer (cus_…). If set, other fields are ignored. */
   id?: string;
   type?: "INDIVIDUAL" | "COMPANY";
   givenName?: string;
@@ -60,8 +60,6 @@ export interface CreatePaymentIntentParams {
   amount: Money;
   paymentMethodTypes: PaymentMethodType[];
   customer?: PaymentIntentCustomer;
-  /** Atajo equivalente a `customer.id`. Preferimos el objeto `customer`. */
-  customerId?: string;
   receivableId?: string;
   categoryId?: string;
   requiresCustomerInfo?: boolean;
@@ -72,38 +70,33 @@ export interface CreatePaymentIntentParams {
   metadata?: Record<string, string>;
 }
 
-export interface PaymentIntentCustomerDocument {
-  type: string;
-  number: string;
+export interface ListPaymentIntentsParams {
+  status?: PaymentIntentStatus;
+  q?: string;
+  customerId?: string;
+  createdFrom?: string;
+  createdTo?: string;
+  page?: number;
+  /** 1–100 or "all" */
+  perPage?: number | "all";
 }
 
-/** Cliente del cobro. Si viene `id`, se ignora el resto. */
-export interface PaymentIntentCustomer {
-  id?: string;
-  type?: "INDIVIDUAL" | "COMPANY";
-  givenName?: string;
-  familyName?: string;
-  legalName?: string;
-  email?: string;
+export interface Pagination {
+  page: number;
+  perPage: number;
+  total: number;
+  totalPages: number;
+  hasMore: boolean;
+}
+
+export interface PaymentIntentList {
+  data: PaymentIntent[];
+  pagination: Pagination;
+}
+
+export interface SendWhatsAppParams {
   phone?: string;
-  externalId?: string;
-  document?: PaymentIntentCustomerDocument;
-}
-
-export interface CreatePaymentIntentParams {
-  amount: Money;
-  paymentMethodTypes: PaymentMethodType[];
-  customer?: PaymentIntentCustomer;
-  /** Atajo equivalente a `customer.id`. Preferimos el objeto `customer`. */
-  customerId?: string;
-  receivableId?: string;
-  categoryId?: string;
-  requiresCustomerInfo?: boolean;
-  description?: string;
-  externalReference?: string;
-  expiresAt?: string;
-  merchantId?: string;
-  metadata?: Record<string, string>;
+  customerName?: string;
 }
 
 export interface PaymentMethodQr {
@@ -133,9 +126,7 @@ export interface CheckoutSession {
   status: CheckoutSessionStatus;
   description?: string;
   successUrl?: string;
-  /** Token de un solo recurso — vive corto, no expone credenciales. */
   clientSecret?: string;
-  /** Pásala directo a KutiCheckout.open({ checkoutUrl }) en el frontend. */
   checkoutUrl?: string;
   paymentMethod?: PaymentMethod;
   expiresAt?: string;
@@ -146,13 +137,12 @@ export interface PaymentIntent {
   id: string;
   merchantId: string;
   livemode?: boolean;
-  /** Id del customer asociado (`customer.id` en la respuesta de la API). */
   customerId?: string;
   amount: Money;
   status: PaymentIntentStatus;
   paymentMethodTypes?: PaymentMethodType[];
   paymentMethod?: PaymentMethod;
-  /** Presente solo si status === SUCCEEDED. */
+  /** Only when status === SUCCEEDED. */
   paidWith?: { methodType?: PaymentMethodType; paidAt?: string };
   checkoutUrl?: string;
   expiresAt?: string;
@@ -165,6 +155,5 @@ export interface PaymentIntent {
 }
 
 export interface RequestOptions {
-  /** Evita duplicar la operación si el request se reintenta (obligatorio para crear cobros con seguridad). */
   idempotencyKey?: string;
 }

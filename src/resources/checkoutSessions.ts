@@ -33,11 +33,7 @@ export class CheckoutSessionsResource {
   constructor(private readonly client: KutiClient) {}
 
   /**
-   * Crea una sesión de cargo único. El monto SIEMPRE debe resolverse desde tu propio catálogo/base
-   * de datos server-side — nunca confíes en un monto que te mande el navegador del comprador.
-   *
-   * Pasa `idempotencyKey` (ej. tu propio id de orden) para que reintentar este request de forma
-   * segura no duplique el cobro.
+   * POST /checkout-sessions. Use idempotencyKey to safely retry.
    */
   async create(params: CreateCheckoutSessionParams, opts?: RequestOptions): Promise<CheckoutSession> {
     const body = {

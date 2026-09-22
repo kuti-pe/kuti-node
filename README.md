@@ -17,31 +17,26 @@ import { KutiClient } from "@kuti-pe/node";
 
 const kuti = new KutiClient({ secretKey: process.env.KUTI_SECRET_KEY! });
 
-// El monto SIEMPRE se resuelve en tu backend — nunca confíes en un monto
-// que te mande el navegador del comprador.
 const session = await kuti.checkoutSessions.create(
   {
     amount: { amount: "249.90", currency: "PEN" },
     paymentMethodTypes: ["INTEROPERABLE_QR"],
     description: "Zapatillas running talla 42",
-    customer: { id: "cus_01ABC" }, // existente — si viene id, se ignora el resto
+    customer: { id: "cus_01ABC" },
     // customer: { name: "María López", email: "maria@example.com" },
   },
-  { idempotencyKey: `order-${orderId}` }, // evita duplicar el cobro si reintentas el request
+  { idempotencyKey: `order-${orderId}` },
 );
 
-// Envía session.checkoutUrl al frontend y ábrelo con KUTI.js:
-//   window.Kuti.open({ checkoutUrl: session.checkoutUrl, onSuccess, onFailure });
+// window.Kuti.open({ checkoutUrl: session.checkoutUrl, onSuccess, onFailure })
 ```
 
-## Confirmar un pago (sin necesitar webhooks)
-
-`onSuccess` de KUTI.js corre en el navegador del comprador — no es confiable por sí solo. Vuelve a preguntarle a la API:
+## Confirmar un pago
 
 ```ts
 const intent = await kuti.paymentIntents.retrieve(paymentIntentId);
 if (intent.status === "SUCCEEDED") {
-  // entrega el producto / activa el servicio
+  // fulfill order
 }
 ```
 
@@ -98,8 +93,10 @@ Los `GET` y los `POST` con `idempotencyKey` se reintentan automáticamente en er
 
 ## API
 
-- `new KutiClient({ secretKey, baseUrl? })`
-- `kuti.checkoutSessions.create(params, opts?)`
-- `kuti.paymentIntents.create(params, opts?)`
+- `kuti.checkoutSessions.create(params, opts?)` — Checkout.js
+- `kuti.paymentIntents.create(params, opts?)` — cobro directo
+- `kuti.paymentIntents.list(params?)`
 - `kuti.paymentIntents.retrieve(id)`
-- `verifyWebhookSignature(payload, signatureHeader, timestampHeader, secret, toleranceSeconds?)`
+- `kuti.paymentIntents.cancel(id)`
+- `kuti.paymentIntents.sendWhatsApp(id, params?)`
+- `verifyWebhookSignature(...)`

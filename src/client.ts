@@ -93,7 +93,11 @@ export class KutiClient {
         });
 
         if (response.ok) {
-          return (await response.json()) as T;
+          if (response.status === 204) {
+            return undefined as T;
+          }
+          const text = await response.text();
+          return (text ? JSON.parse(text) : {}) as T;
         }
 
         const envelope = await safeParseJson<ApiErrorEnvelope>(response);
