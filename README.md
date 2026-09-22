@@ -24,7 +24,8 @@ const session = await kuti.checkoutSessions.create(
     amount: { amount: "249.90", currency: "PEN" },
     paymentMethodTypes: ["INTEROPERABLE_QR"],
     description: "Zapatillas running talla 42",
-    customer: { name: "Maria Lopez", email: "maria@example.com" },
+    customer: { id: "cus_01ABC" }, // existente — si viene id, se ignora el resto
+    // customer: { name: "María López", email: "maria@example.com" },
   },
   { idempotencyKey: `order-${orderId}` }, // evita duplicar el cobro si reintentas el request
 );
