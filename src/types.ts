@@ -38,6 +38,74 @@ export interface CreateCheckoutSessionParams {
   metadata?: Record<string, string>;
 }
 
+export interface PaymentIntentCustomerDocument {
+  type: string;
+  number: string;
+}
+
+/** Cliente del cobro. Si viene `id`, se ignora el resto. */
+export interface PaymentIntentCustomer {
+  id?: string;
+  type?: "INDIVIDUAL" | "COMPANY";
+  givenName?: string;
+  familyName?: string;
+  legalName?: string;
+  email?: string;
+  phone?: string;
+  externalId?: string;
+  document?: PaymentIntentCustomerDocument;
+}
+
+export interface CreatePaymentIntentParams {
+  amount: Money;
+  paymentMethodTypes: PaymentMethodType[];
+  customer?: PaymentIntentCustomer;
+  /** Atajo equivalente a `customer.id`. Preferimos el objeto `customer`. */
+  customerId?: string;
+  receivableId?: string;
+  categoryId?: string;
+  requiresCustomerInfo?: boolean;
+  description?: string;
+  externalReference?: string;
+  expiresAt?: string;
+  merchantId?: string;
+  metadata?: Record<string, string>;
+}
+
+export interface PaymentIntentCustomerDocument {
+  type: string;
+  number: string;
+}
+
+/** Cliente del cobro. Si viene `id`, se ignora el resto. */
+export interface PaymentIntentCustomer {
+  id?: string;
+  type?: "INDIVIDUAL" | "COMPANY";
+  givenName?: string;
+  familyName?: string;
+  legalName?: string;
+  email?: string;
+  phone?: string;
+  externalId?: string;
+  document?: PaymentIntentCustomerDocument;
+}
+
+export interface CreatePaymentIntentParams {
+  amount: Money;
+  paymentMethodTypes: PaymentMethodType[];
+  customer?: PaymentIntentCustomer;
+  /** Atajo equivalente a `customer.id`. Preferimos el objeto `customer`. */
+  customerId?: string;
+  receivableId?: string;
+  categoryId?: string;
+  requiresCustomerInfo?: boolean;
+  description?: string;
+  externalReference?: string;
+  expiresAt?: string;
+  merchantId?: string;
+  metadata?: Record<string, string>;
+}
+
 export interface PaymentMethodQr {
   type?: PaymentMethodType;
   payload?: string;

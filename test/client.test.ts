@@ -160,6 +160,51 @@ describe("KutiClient", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("creates a payment intent with nested customer and idempotency key", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(201, {
+        data: {
+          id: "pi_created",
+          merchant_id: "mer_1",
+          customer: { id: "cus_1" },
+          amount: { amount: "50.00", currency: "PEN" },
+          status: "PENDING",
+          payment_method_types: ["INTEROPERABLE_QR", "BANK_TRANSFER"],
+          checkout_url: "https://pay.kuti.pe/c/ABC",
+          created_at: "2026-01-01T00:00:00Z",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new KutiClient({ secretKey: SECRET_KEY, baseUrl: "https://example.test/v1" });
+    const intent = await client.paymentIntents.create(
+      {
+        amount: { amount: "50.00", currency: "PEN" },
+        paymentMethodTypes: ["INTEROPERABLE_QR", "BANK_TRANSFER"],
+        customer: {
+          type: "INDIVIDUAL",
+          givenName: "María",
+          familyName: "López",
+          email: "maria@example.com",
+          document: { type: "DNI", number: "45678912" },
+        },
+        description: "Pedido #1042",
+      },
+      { idempotencyKey: "order-1042" },
+    );
+
+    expect(intent.id).toBe("pi_created");
+    expect(intent.customerId).toBe("cus_1");
+    expect(intent.checkoutUrl).toBe("https://pay.kuti.pe/c/ABC");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://example.test/v1/payment-intents");
+    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("order-1042");
+    const body = JSON.parse(String(init.body));
+    expect(body.customer.given_name).toBe("María");
+    expect(body.customer.document).toEqual({ type: "DNI", number: "45678912" });
+  });
+
   it("does retry a POST when the caller provides an idempotency key", async () => {
     const fetchMock = vi
       .fn()

@@ -1,5 +1,10 @@
 import type { KutiClient } from "../client.js";
-import type { PaymentIntent, PaymentMethodType } from "../types.js";
+import type {
+  CreatePaymentIntentParams,
+  PaymentIntent,
+  PaymentMethodType,
+  RequestOptions,
+} from "../types.js";
 
 interface PaymentIntentEnvelope {
   data: PaymentIntentApiShape;
@@ -32,6 +37,49 @@ interface PaymentIntentApiShape {
 
 export class PaymentIntentsResource {
   constructor(private readonly client: KutiClient) {}
+
+  /**
+   * Crea un payment intent (cobro). Devuelve QR, código de pago de servicios y checkout_url.
+   * El monto SIEMPRE debe resolverse en tu backend. Pasa `idempotencyKey` para no duplicar cobros.
+   */
+  async create(params: CreatePaymentIntentParams, opts?: RequestOptions): Promise<PaymentIntent> {
+    const body = {
+      amount: params.amount,
+      payment_method_types: params.paymentMethodTypes,
+      customer: params.customer
+        ? {
+            id: params.customer.id,
+            type: params.customer.type,
+            given_name: params.customer.givenName,
+            family_name: params.customer.familyName,
+            legal_name: params.customer.legalName,
+            email: params.customer.email,
+            phone: params.customer.phone,
+            external_id: params.customer.externalId,
+            document: params.customer.document
+              ? { type: params.customer.document.type, number: params.customer.document.number }
+              : undefined,
+          }
+        : undefined,
+      customer_id: params.customerId,
+      receivable_id: params.receivableId,
+      category_id: params.categoryId,
+      requires_customer_info: params.requiresCustomerInfo,
+      description: params.description,
+      external_reference: params.externalReference,
+      expires_at: params.expiresAt,
+      merchant_id: params.merchantId,
+      metadata: params.metadata,
+    };
+
+    const response = await this.client.request<PaymentIntentEnvelope>(
+      "POST",
+      "/payment-intents",
+      body,
+      opts,
+    );
+    return fromApiShape(response.data);
+  }
 
   /**
    * Consulta el estado real de un cobro. Es la fuente de verdad — nunca confíes en un callback del

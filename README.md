@@ -100,5 +100,6 @@ Los `GET` y los `POST` con `idempotencyKey` se reintentan automáticamente en er
 
 - `new KutiClient({ secretKey, baseUrl? })`
 - `kuti.checkoutSessions.create(params, opts?)`
+- `kuti.paymentIntents.create(params, opts?)`
 - `kuti.paymentIntents.retrieve(id)`
 - `verifyWebhookSignature(payload, signatureHeader, timestampHeader, secret, toleranceSeconds?)`

@@ -1,7 +1,7 @@
 {
   "name": "@kuti-pe/node",
-  "version": "1.0.1",
-  "description": "SDK oficial de KUTI para Node.js — crea checkout sessions, consulta pagos y verifica webhooks.",
+  "version": "1.0.2",
+  "description": "SDK oficial de KUTI para Node.js — crea cobros y checkout sessions, consulta pagos y verifica webhooks.",
   "license": "MIT",
   "author": "KUTI <soporte@kuti.pe> (https://www.kuti.pe)",
   "homepage": "https://docs.kuti.pe",
