@@ -184,8 +184,8 @@ describe("KutiClient", () => {
         paymentMethodTypes: ["INTEROPERABLE_QR", "BANK_TRANSFER"],
         customer: {
           type: "INDIVIDUAL",
-          givenName: "María",
-          familyName: "López",
+          firstName: "María",
+          lastName: "López",
           email: "maria@example.com",
           document: { type: "DNI", number: "45678912" },
         },
@@ -201,7 +201,7 @@ describe("KutiClient", () => {
     expect(url).toBe("https://example.test/v1/payment-intents");
     expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("order-1042");
     const body = JSON.parse(String(init.body));
-    expect(body.customer.given_name).toBe("María");
+    expect(body.customer.first_name).toBe("María");
     expect(body.customer.document).toEqual({ type: "DNI", number: "45678912" });
   });
 
@@ -233,5 +233,68 @@ describe("KutiClient", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("order-42");
+  });
+
+  it("creates a customer with document and custom fields", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(201, {
+        data: {
+          id: "cus_new",
+          merchant_id: "mer_1",
+          type: "INDIVIDUAL",
+          first_name: "María",
+          last_name: "López",
+          document: { type: "DNI", number: "45678912", country: "PE" },
+          custom_fields: { grade: "quinto", interests: ["math"] },
+          created_at: "2026-01-01T00:00:00Z",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new KutiClient({ secretKey: SECRET_KEY, baseUrl: "https://example.test/v1" });
+    const customer = await client.customers.create({
+      type: "INDIVIDUAL",
+      firstName: "María",
+      lastName: "López",
+      document: { number: "45678912" },
+      customFields: { grade: "5to grado", interests: ["math"] },
+    });
+
+    expect(customer.id).toBe("cus_new");
+    expect(customer.document).toEqual({ type: "DNI", number: "45678912", country: "PE" });
+    expect(customer.customFields).toEqual({ grade: "quinto", interests: ["math"] });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://example.test/v1/customers");
+    const body = JSON.parse(String(init.body));
+    expect(body.first_name).toBe("María");
+    expect(body.document).toEqual({ number: "45678912" });
+    expect(body.custom_fields).toEqual({ grade: "5to grado", interests: ["math"] });
+  });
+
+  it("updates custom fields with PATCH and null removes a value", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        data: {
+          id: "cus_1",
+          merchant_id: "mer_1",
+          type: "INDIVIDUAL",
+          custom_fields: { grade: "sexto" },
+          created_at: "2026-01-01T00:00:00Z",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new KutiClient({ secretKey: SECRET_KEY, baseUrl: "https://example.test/v1" });
+    const customer = await client.customers.update("cus_1", {
+      customFields: { grade: "sexto", birth_date: null },
+    });
+
+    expect(customer.customFields).toEqual({ grade: "sexto" });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://example.test/v1/customers/cus_1");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(String(init.body)).custom_fields).toEqual({ grade: "sexto", birth_date: null });
   });
 });

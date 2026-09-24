@@ -1,5 +1,6 @@
 import { errorForStatus, KutiConnectionError, type ErrorDetail } from "./errors.js";
 import { CheckoutSessionsResource } from "./resources/checkoutSessions.js";
+import { CustomersResource } from "./resources/customers.js";
 import { PaymentIntentsResource } from "./resources/paymentIntents.js";
 import type { RequestOptions } from "./types.js";
 
@@ -28,7 +29,7 @@ interface ApiErrorEnvelope {
 }
 
 /**
- * Cliente HTTP central de KUTI. Cuelgan de aquí los recursos (`checkoutSessions`, `paymentIntents`);
+ * Cliente HTTP central de KUTI. Cuelgan de aquí los recursos (`checkoutSessions`, `customers`, `paymentIntents`);
  * este archivo solo resuelve auth, reintentos y mapeo de errores — cada recurso solo arma su propio
  * path/body.
  */
@@ -37,6 +38,7 @@ export class KutiClient {
   private readonly baseUrl: string;
 
   readonly checkoutSessions: CheckoutSessionsResource;
+  readonly customers: CustomersResource;
   readonly paymentIntents: PaymentIntentsResource;
 
   constructor(options: KutiClientOptions) {
@@ -55,12 +57,13 @@ export class KutiClient {
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
 
     this.checkoutSessions = new CheckoutSessionsResource(this);
+    this.customers = new CustomersResource(this);
     this.paymentIntents = new PaymentIntentsResource(this);
   }
 
   /** @internal usado por los recursos — no lo llames directo. */
   async request<T>(
-    method: "GET" | "POST",
+    method: "GET" | "POST" | "PATCH" | "DELETE",
     path: string,
     body?: unknown,
     opts?: RequestOptions,

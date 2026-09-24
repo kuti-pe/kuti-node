@@ -5,6 +5,7 @@ import type {
   PaymentMethodType,
   RequestOptions,
 } from "../types.js";
+import { toCustomerBody } from "./customerShape.js";
 
 interface CheckoutSessionEnvelope {
   data: CheckoutSessionApiShape;
@@ -39,15 +40,7 @@ export class CheckoutSessionsResource {
     const body = {
       amount: params.amount,
       payment_method_types: params.paymentMethodTypes,
-      customer: params.customer
-        ? {
-            id: params.customer.id,
-            external_id: params.customer.externalId,
-            name: params.customer.name,
-            email: params.customer.email,
-            phone: params.customer.phone,
-          }
-        : undefined,
+      customer: toCustomerBody(params.customer),
       description: params.description,
       external_reference: params.externalReference,
       success_url: params.successUrl,

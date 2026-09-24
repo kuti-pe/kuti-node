@@ -23,7 +23,7 @@ const session = await kuti.checkoutSessions.create(
     paymentMethodTypes: ["INTEROPERABLE_QR"],
     description: "Zapatillas running talla 42",
     customer: { id: "cus_01ABC" },
-    // customer: { name: "María López", email: "maria@example.com" },
+    // customer: { firstName: "María", lastName: "López", email: "maria@example.com" },
   },
   { idempotencyKey: `order-${orderId}` },
 );
@@ -91,8 +91,40 @@ try {
 
 Los `GET` y los `POST` con `idempotencyKey` se reintentan automáticamente en errores de red o `429`/`503`. Un `POST` sin `idempotencyKey` nunca se reintenta, para no duplicar un cobro.
 
+## Clientes y campos personalizados
+
+El cliente tiene la **misma forma** en `customers.create`, en el `customer` de un cobro y en el de
+una checkout session. `customFields` son los campos que el negocio definió en
+**Ajustes → Clientes → Campos** (la key de cada campo):
+
+```ts
+const customer = await kuti.customers.create({
+  type: "INDIVIDUAL",
+  firstName: "María",
+  lastName: "López",
+  document: { type: "DNI", number: "45678912" }, // type opcional: se deduce del número
+  email: "maria@example.com",
+  customFields: { grade: "quinto", student_code: "2026-00781" },
+});
+
+// En un cobro: se reutiliza el cliente por id → externalId → documento, o se crea.
+await kuti.paymentIntents.create(
+  {
+    amount: { amount: "250.00", currency: "PEN" },
+    paymentMethodTypes: ["INTEROPERABLE_QR"],
+    description: "Pensión marzo",
+    customer: { document: { number: "45678912" }, customFields: { grade: "sexto" } },
+  },
+  { idempotencyKey: "pension-2026-03-45678912" },
+);
+
+// Editar: solo cambian las keys enviadas; null borra el valor.
+await kuti.customers.update(customer.id, { customFields: { birth_date: null } });
+```
+
 ## API
 
+- `kuti.customers.create(params)` / `retrieve(id)` / `update(id, params)` / `list(params?)` / `del(id)`
 - `kuti.checkoutSessions.create(params, opts?)` — Checkout.js
 - `kuti.paymentIntents.create(params, opts?)` — cobro directo
 - `kuti.paymentIntents.list(params?)`

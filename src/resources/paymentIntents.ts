@@ -8,6 +8,11 @@ import type {
   RequestOptions,
   SendWhatsAppParams,
 } from "../types.js";
+import {
+  fromPaymentIntentCustomer,
+  toCustomerBody,
+  type PaymentIntentCustomerApiShape,
+} from "./customerShape.js";
 
 interface PaymentIntentEnvelope {
   data: PaymentIntentApiShape;
@@ -29,7 +34,7 @@ interface PaymentIntentApiShape {
   merchant_id: string;
   livemode?: boolean;
   customer_id?: string;
-  customer?: { id?: string };
+  customer?: PaymentIntentCustomerApiShape;
   amount: PaymentIntent["amount"];
   status: PaymentIntent["status"];
   payment_method_types?: PaymentIntent["paymentMethodTypes"];
@@ -56,21 +61,7 @@ export class PaymentIntentsResource {
     const body = {
       amount: params.amount,
       payment_method_types: params.paymentMethodTypes,
-      customer: params.customer
-        ? {
-            id: params.customer.id,
-            type: params.customer.type,
-            given_name: params.customer.givenName,
-            family_name: params.customer.familyName,
-            legal_name: params.customer.legalName,
-            email: params.customer.email,
-            phone: params.customer.phone,
-            external_id: params.customer.externalId,
-            document: params.customer.document
-              ? { type: params.customer.document.type, number: params.customer.document.number }
-              : undefined,
-          }
-        : undefined,
+      customer: toCustomerBody(params.customer),
       receivable_id: params.receivableId,
       category_id: params.categoryId,
       requires_customer_info: params.requiresCustomerInfo,
@@ -155,6 +146,7 @@ function fromApiShape(dto: PaymentIntentApiShape): PaymentIntent {
     merchantId: dto.merchant_id,
     livemode: dto.livemode,
     customerId,
+    customer: fromPaymentIntentCustomer(dto.customer),
     amount: dto.amount,
     status: dto.status,
     paymentMethodTypes: dto.payment_method_types,
