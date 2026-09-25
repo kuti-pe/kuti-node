@@ -297,4 +297,90 @@ describe("KutiClient", () => {
     expect(init.method).toBe("PATCH");
     expect(JSON.parse(String(init.body)).custom_fields).toEqual({ grade: "sexto", birth_date: null });
   });
+
+  it("creates a payment link and maps it to camelCase", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(201, {
+        data: {
+          id: "plink_1",
+          merchant_id: "mer_1",
+          livemode: false,
+          slug: "taller-excel",
+          url: "https://pay.kuti.pe/l/taller-excel",
+          title: "Taller de Excel",
+          template: "COURSE",
+          pricing: "FIXED",
+          currency: "PEN",
+          amount: "120.00",
+          suggested_amounts: [],
+          payment_method_types: ["INTEROPERABLE_QR"],
+          status: "ACTIVE",
+          customer_fields: [{ id: "cfd_1", key: "codigo", label: "Código", type: "TEXT", required: true }],
+          button_label: "Inscribirme",
+          payments_count: 0,
+          views_count: 0,
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new KutiClient({ secretKey: SECRET_KEY, baseUrl: "https://example.test/v1" });
+    const link = await client.paymentLinks.create({
+      title: "Taller de Excel",
+      pricing: "FIXED",
+      amount: "120.00",
+      paymentMethodTypes: ["INTEROPERABLE_QR"],
+      customerFieldIds: ["cfd_1"],
+      buttonLabel: "Inscribirme",
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://example.test/v1/payment-links");
+    const body = JSON.parse(init.body as string);
+    expect(body.customer_field_ids).toEqual(["cfd_1"]);
+    expect(body.button_label).toBe("Inscribirme");
+    expect(link.url).toBe("https://pay.kuti.pe/l/taller-excel");
+    expect(link.customerFields[0]?.key).toBe("codigo");
+  });
+
+  it("filters payment intents by source and payment link, and sends send_via", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          data: [],
+          pagination: { page: 1, per_page: 25, total: 0, total_pages: 0, has_more: false },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(201, {
+          data: {
+            id: "pi_1",
+            merchant_id: "mer_1",
+            amount: { amount: "10.00", currency: "PEN" },
+            status: "PENDING",
+            send_via: ["EMAIL", "WHATSAPP"],
+            created_at: "2026-01-01T00:00:00Z",
+          },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new KutiClient({ secretKey: SECRET_KEY, baseUrl: "https://example.test/v1" });
+    await client.paymentIntents.list({ source: "link", paymentLinkId: "plink_1" });
+    const [listUrl] = fetchMock.mock.calls[0] as [string];
+    expect(listUrl).toContain("source=link");
+    expect(listUrl).toContain("payment_link_id=plink_1");
+
+    const intent = await client.paymentIntents.create({
+      amount: { amount: "10.00", currency: "PEN" },
+      paymentMethodTypes: ["INTEROPERABLE_QR"],
+      sendVia: ["EMAIL", "WHATSAPP"],
+    });
+    const [, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).send_via).toEqual(["EMAIL", "WHATSAPP"]);
+    expect(intent.sendVia).toEqual(["EMAIL", "WHATSAPP"]);
+  });
 });

@@ -122,13 +122,59 @@ await kuti.paymentIntents.create(
 await kuti.customers.update(customer.id, { customFields: { birth_date: null } });
 ```
 
+## Links de pago
+
+Un enlace permanente que pagan muchas personas (curso, entrada, donación). Cada pago es un cobro
+normal con `paymentLinkId`.
+
+```ts
+const link = await kuti.paymentLinks.create({
+  title: "Taller de Excel — sábado 10am",
+  template: "COURSE",
+  pricing: "FIXED",
+  amount: "120.00",
+  paymentMethodTypes: ["INTEROPERABLE_QR", "BANK_TRANSFER"],
+  customerFieldIds: ["cfd_…"], // preguntas a quien paga ([] = solo nombre, apellido y correo)
+  buttonLabel: "Inscribirme",
+  successMessage: "¡Listo! Te esperamos el sábado.",
+  successButtonLabel: "Unirme al grupo",
+  successButtonUrl: "https://chat.whatsapp.com/…",
+});
+console.log(link.url); // https://pay.kuti.pe/l/taller-de-excel
+
+// Donación: monto libre
+await kuti.paymentLinks.create({
+  title: "Donación para la biblioteca",
+  template: "DONATION",
+  pricing: "CUSTOMER_CHOOSES",
+  minAmount: "5.00",
+  suggestedAmounts: ["20.00", "50.00", "100.00"],
+  paymentMethodTypes: ["INTEROPERABLE_QR", "BANK_TRANSFER"],
+});
+
+// Quienes pagaron un link
+const paid = await kuti.paymentIntents.list({ paymentLinkId: link.id, status: "SUCCEEDED", perPage: "all" });
+```
+
+## Enviar el cobro al crearlo
+
+```ts
+await kuti.paymentIntents.create({
+  amount: { amount: "250.00", currency: "PEN" },
+  paymentMethodTypes: ["INTEROPERABLE_QR"],
+  customer: { id: "cus_…" },
+  sendVia: ["EMAIL", "WHATSAPP"], // sin enviar = ["EMAIL"]; [] = no enviar
+});
+```
+
 ## API
 
 - `kuti.customers.create(params)` / `retrieve(id)` / `update(id, params)` / `list(params?)` / `del(id)`
 - `kuti.checkoutSessions.create(params, opts?)` — Checkout.js
 - `kuti.paymentIntents.create(params, opts?)` — cobro directo
-- `kuti.paymentIntents.list(params?)`
+- `kuti.paymentIntents.list(params?)` — filtros `status`, `q`, `customerId`, `source` (single | link | recurring), `paymentLinkId`
 - `kuti.paymentIntents.retrieve(id)`
 - `kuti.paymentIntents.cancel(id)`
 - `kuti.paymentIntents.sendWhatsApp(id, params?)`
+- `kuti.paymentLinks.create(params)` / `retrieve(id)` / `update(id, params)` / `list(params?)` / `activate(id)` / `deactivate(id)` / `checkSlug(slug, exceptId?)`
 - `verifyWebhookSignature(...)`

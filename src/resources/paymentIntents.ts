@@ -50,6 +50,8 @@ interface PaymentIntentApiShape {
   category_id?: string;
   metadata?: Record<string, string>;
   requires_customer_info?: boolean;
+  payment_link_id?: string | null;
+  send_via?: PaymentIntent["sendVia"];
   created_at: string;
 }
 
@@ -70,6 +72,7 @@ export class PaymentIntentsResource {
       expires_at: params.expiresAt,
       merchant_id: params.merchantId,
       metadata: params.metadata,
+      send_via: params.sendVia,
     };
 
     const response = await this.client.request<PaymentIntentEnvelope>(
@@ -87,6 +90,8 @@ export class PaymentIntentsResource {
     if (params.status) qs.set("status", params.status);
     if (params.q) qs.set("q", params.q);
     if (params.customerId) qs.set("customer_id", params.customerId);
+    if (params.source) qs.set("source", params.source);
+    if (params.paymentLinkId) qs.set("payment_link_id", params.paymentLinkId);
     if (params.createdFrom) qs.set("created_from", params.createdFrom);
     if (params.createdTo) qs.set("created_to", params.createdTo);
     if (params.page != null) qs.set("page", String(params.page));
@@ -182,6 +187,8 @@ function fromApiShape(dto: PaymentIntentApiShape): PaymentIntent {
     categoryId: dto.category_id,
     metadata: dto.metadata,
     requiresCustomerInfo: dto.requires_customer_info,
+    paymentLinkId: dto.payment_link_id,
+    sendVia: dto.send_via,
     createdAt: dto.created_at,
   };
 }

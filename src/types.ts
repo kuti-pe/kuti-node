@@ -85,12 +85,25 @@ export interface CreatePaymentIntentParams {
   expiresAt?: string;
   merchantId?: string;
   metadata?: Record<string, string>;
+  /**
+   * Por dónde se le envía el cobro al cliente al crearlo. Sin enviar = ["EMAIL"];
+   * [] = no enviar nada. WHATSAPP necesita teléfono del cliente (usa 1 moneda).
+   */
+  sendVia?: SendChannel[];
 }
+
+export type SendChannel = "EMAIL" | "WHATSAPP";
+
+/** Origen del cobro: a una persona, de un link de pago o de un cobro recurrente. */
+export type PaymentIntentSource = "single" | "link" | "recurring";
 
 export interface ListPaymentIntentsParams {
   status?: PaymentIntentStatus;
   q?: string;
   customerId?: string;
+  source?: PaymentIntentSource;
+  /** Solo los cobros de este link de pago (plink_…). */
+  paymentLinkId?: string;
   createdFrom?: string;
   createdTo?: string;
   page?: number;
@@ -183,6 +196,10 @@ export interface PaymentIntent {
   categoryId?: string;
   metadata?: Record<string, string>;
   requiresCustomerInfo?: boolean;
+  /** Link de pago del que salió este cobro (plink_…), si aplica. */
+  paymentLinkId?: string | null;
+  /** Canales por los que se envió el cobro al crearlo. */
+  sendVia?: SendChannel[];
   createdAt: string;
 }
 
@@ -244,4 +261,106 @@ export interface DeleteCustomerResult {
   /** true = archived because it has payment intents; false = permanently deleted. */
   archived: boolean;
   paymentIntentsCount: number;
+}
+
+// ---- Payment links ----
+
+export type PaymentLinkTemplate = "COURSE" | "EVENT" | "DONATION" | "GENERIC";
+export type PaymentLinkPricing = "FIXED" | "CUSTOMER_CHOOSES";
+export type PaymentLinkStatus = "ACTIVE" | "INACTIVE";
+
+/** Pregunta que el link le hace a quien paga (copia del campo personalizado). */
+export interface PaymentLinkCustomerField {
+  id: string;
+  key: string;
+  label: string;
+  type: string;
+  options: { key: string; label: string }[];
+  required: boolean;
+  helpText?: string | null;
+}
+
+export interface PaymentLink {
+  id: string;
+  merchantId: string;
+  livemode: boolean;
+  slug: string;
+  /** URL pública para compartir (pay.kuti.pe/l/{slug}). */
+  url: string;
+  title: string;
+  description?: string | null;
+  imageUrl?: string | null;
+  template: PaymentLinkTemplate;
+  pricing: PaymentLinkPricing;
+  currency: string;
+  amount?: string | null;
+  minAmount?: string | null;
+  maxAmount?: string | null;
+  suggestedAmounts: string[];
+  paymentMethodTypes: PaymentMethodType[];
+  categoryId?: string | null;
+  status: PaymentLinkStatus;
+  expiresAt?: string | null;
+  customerFields: PaymentLinkCustomerField[];
+  buttonLabel?: string | null;
+  successMessage?: string | null;
+  successButtonLabel?: string | null;
+  successButtonUrl?: string | null;
+  /** Pagos confirmados. */
+  paymentsCount?: number;
+  /** Personas que llenaron sus datos (cobros creados desde el link). */
+  checkoutsCount?: number;
+  /** Visitas a la página pública. */
+  viewsCount?: number;
+  amountCollected?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentLinkParams {
+  title: string;
+  pricing: PaymentLinkPricing;
+  paymentMethodTypes: PaymentMethodType[];
+  /** Solo FIXED. */
+  amount?: string;
+  /** Solo CUSTOMER_CHOOSES (obligatorio). */
+  minAmount?: string;
+  maxAmount?: string;
+  /** Hasta 4. */
+  suggestedAmounts?: string[];
+  /** Sin enviar = se genera del título. */
+  slug?: string;
+  template?: PaymentLinkTemplate;
+  description?: string | null;
+  imageUrl?: string | null;
+  currency?: string;
+  categoryId?: string | null;
+  expiresAt?: string | null;
+  /**
+   * Campos personalizados (cfd_…) a preguntar, en orden. El link guarda una copia.
+   * Al crear sin enviar = los "pedir también al pagar"; [] = ninguno.
+   */
+  customerFieldIds?: string[];
+  buttonLabel?: string | null;
+  successMessage?: string | null;
+  successButtonLabel?: string | null;
+  successButtonUrl?: string | null;
+}
+
+export interface ListPaymentLinksParams {
+  status?: PaymentLinkStatus;
+  q?: string;
+  page?: number;
+  perPage?: number | "all";
+}
+
+export interface PaymentLinkList {
+  data: PaymentLink[];
+  pagination: Pagination;
+}
+
+export interface SlugAvailability {
+  slug: string;
+  available: boolean;
+  suggestion: string;
 }
