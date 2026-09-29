@@ -3,6 +3,9 @@ import { CheckoutSessionsResource } from "./resources/checkoutSessions.js";
 import { CustomersResource } from "./resources/customers.js";
 import { PaymentIntentsResource } from "./resources/paymentIntents.js";
 import { PaymentLinksResource } from "./resources/paymentLinks.js";
+import { PaymentExceptionsResource } from "./resources/paymentExceptions.js";
+import { WebhookDeliveriesResource } from "./resources/webhookDeliveries.js";
+import { DiagnosticsResource } from "./resources/diagnostics.js";
 import type { RequestOptions } from "./types.js";
 
 const DEFAULT_BASE_URL = "https://api.kuti.pe/v1";
@@ -24,13 +27,14 @@ interface ApiErrorEnvelope {
     code?: string;
     message?: string;
     request_id?: string;
+    correlation_id?: string;
     doc_url?: string;
     details?: ErrorDetail[];
   };
 }
 
 /**
- * Cliente HTTP central de KUTI. Cuelgan de aquí los recursos (`checkoutSessions`, `customers`, `paymentIntents`, `paymentLinks`);
+ * Cliente HTTP central de KUTI. Cuelgan de aquí los recursos (`checkoutSessions`, `customers`, `paymentIntents`, `paymentLinks`, `paymentExceptions`, `webhookDeliveries`, `diagnostics`);
  * este archivo solo resuelve auth, reintentos y mapeo de errores — cada recurso solo arma su propio
  * path/body.
  */
@@ -42,6 +46,9 @@ export class KutiClient {
   readonly customers: CustomersResource;
   readonly paymentIntents: PaymentIntentsResource;
   readonly paymentLinks: PaymentLinksResource;
+  readonly paymentExceptions: PaymentExceptionsResource;
+  readonly webhookDeliveries: WebhookDeliveriesResource;
+  readonly diagnostics: DiagnosticsResource;
 
   constructor(options: KutiClientOptions) {
     if (typeof (globalThis as { window?: unknown }).window !== "undefined") {
@@ -62,6 +69,9 @@ export class KutiClient {
     this.customers = new CustomersResource(this);
     this.paymentIntents = new PaymentIntentsResource(this);
     this.paymentLinks = new PaymentLinksResource(this);
+    this.paymentExceptions = new PaymentExceptionsResource(this);
+    this.webhookDeliveries = new WebhookDeliveriesResource(this);
+    this.diagnostics = new DiagnosticsResource(this);
   }
 
   /** @internal usado por los recursos — no lo llames directo. */
@@ -112,6 +122,7 @@ export class KutiClient {
           code: envelope?.error?.code ?? "UNKNOWN_ERROR",
           message: envelope?.error?.message ?? envelope?.message ?? response.statusText,
           requestId: envelope?.error?.request_id,
+          correlationId: envelope?.error?.correlation_id,
           docUrl: envelope?.error?.doc_url,
           details: envelope?.error?.details,
         });

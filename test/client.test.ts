@@ -4,6 +4,7 @@ import { KutiClient } from "../src/client.js";
 import {
   KutiAuthenticationError,
   KutiNotFoundError,
+  KutiPermissionError,
   KutiValidationError,
   KutiRateLimitError,
 } from "../src/errors.js";
@@ -382,5 +383,130 @@ describe("KutiClient", () => {
     const [, init] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(JSON.parse(init.body as string).send_via).toEqual(["EMAIL", "WHATSAPP"]);
     expect(intent.sendVia).toEqual(["EMAIL", "WHATSAPP"]);
+  });
+
+  it("exposes requestId, correlationId and the kind of 403", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(403, {
+          success: false,
+          message: "Sin permiso",
+          error: {
+            code: "INSUFFICIENT_SCOPE",
+            message: "Esta API key no tiene el permiso payment_intents:write.",
+            request_id: "req_1",
+            correlation_id: "pedido-1042",
+          },
+        }),
+      ),
+    );
+    const client = new KutiClient({ secretKey: SECRET_KEY, baseUrl: "https://example.test/v1" });
+
+    const err = await client.paymentIntents.retrieve("pi_1").catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(KutiPermissionError);
+    const perm = err as KutiPermissionError;
+    expect(perm.isInsufficientScope).toBe(true);
+    expect(perm.isDashboardOnly).toBe(false);
+    expect(perm.requestId).toBe("req_1");
+    expect(perm.correlationId).toBe("pedido-1042");
+  });
+
+  it("lists and resolves payment exceptions", async () => {
+    const exception = {
+      id: "pexc_1",
+      merchant_id: "mer_1",
+      livemode: false,
+      payment_intent_id: "pi_1",
+      payment_method_type: "BANK_TRANSFER",
+      amount: { amount: "250.00", currency: "PEN" },
+      reason: "DUPLICATE",
+      status: "OPEN",
+      balance_transaction_id: "btxn_1",
+      resolution_note: null,
+      created_at: "2026-09-29T15:20:00Z",
+      resolved_at: null,
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          data: [exception],
+          pagination: { page: 1, per_page: 25, total: 1, total_pages: 1, has_more: false },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, { data: { ...exception, status: "REFUNDED", resolution_note: "Devuelto" } }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new KutiClient({ secretKey: SECRET_KEY, baseUrl: "https://example.test/v1" });
+
+    const list = await client.paymentExceptions.list({ status: "OPEN", paymentIntentId: "pi_1" });
+    const resolved = await client.paymentExceptions.resolve("pexc_1", { status: "REFUNDED", note: "Devuelto" });
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://example.test/v1/payment-exceptions?status=OPEN&payment_intent_id=pi_1",
+    );
+    expect(list.data[0]).toMatchObject({ reason: "DUPLICATE", paymentIntentId: "pi_1", resolutionNote: undefined });
+    expect(list.pagination.total).toBe(1);
+    const [, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ status: "REFUNDED", note: "Devuelto" });
+    expect(resolved.status).toBe("REFUNDED");
+  });
+
+  it("reads a request diagnosis and a payment trace", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          data: {
+            request: {
+              id: "req_1", livemode: false, source: "API", method: "POST", path: "/payment-intents",
+              status: 201, duration_ms: 84, created_at: "2026-09-29T15:10:02Z",
+            },
+            events: [{
+              id: "evt_1", type: "payment.created", created_at: "2026-09-29T15:10:02Z",
+              webhook_deliveries: [{ id: "whd_1", status: "DEAD", attempts: 6, last_http_status: 502 }],
+            }],
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          data: {
+            payment_intent_id: "pi_1", status: "SUCCEEDED", amount: { amount: "60.00", currency: "PEN" },
+            created_at: "2026-09-29T15:10:02Z",
+            methods: [{ method: "INTEROPERABLE_QR", status: "SUCCEEDED" }],
+            timeline: [{ at: "2026-09-29T15:10:02Z", kind: "REQUEST", title: "POST /payment-intents → 201", request_id: "req_1" }],
+          },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new KutiClient({ secretKey: SECRET_KEY, baseUrl: "https://example.test/v1" });
+
+    const diagnosis = await client.diagnostics.getRequest("req_1");
+    const trace = await client.diagnostics.tracePaymentIntent("pi_1");
+
+    expect(diagnosis.request.durationMs).toBe(84);
+    expect(diagnosis.events[0].webhookDeliveries[0]).toMatchObject({ status: "DEAD", lastHttpStatus: 502 });
+    expect(fetchMock.mock.calls[1][0]).toBe("https://example.test/v1/diagnostics/payment-intents/pi_1/trace");
+    expect(trace.timeline[0]).toMatchObject({ kind: "REQUEST", requestId: "req_1" });
+  });
+
+  it("maps the customer payment code", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(200, {
+          data: { id: "cus_1", merchant_id: "mer_1", code: "ZIZE00001", type: "INDIVIDUAL", created_at: "2026-01-01T00:00:00Z" },
+        }),
+      ),
+    );
+    const client = new KutiClient({ secretKey: SECRET_KEY, baseUrl: "https://example.test/v1" });
+
+    const customer = await client.customers.retrieve("cus_1");
+
+    expect(customer.code).toBe("ZIZE00001");
   });
 });

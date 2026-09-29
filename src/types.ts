@@ -210,6 +210,8 @@ export interface RequestOptions {
 export interface Customer {
   id: string;
   merchantId: string;
+  /** Código de pago del cliente (prefijo del negocio + número, ej. ZIZE00001). Lo asigna KUTI. */
+  code?: string;
   externalId?: string;
   type: CustomerType;
   firstName?: string;
@@ -363,4 +365,152 @@ export interface SlugAvailability {
   slug: string;
   available: boolean;
   suggestion: string;
+}
+
+// ---------- Pagos para revisar ----------
+
+/**
+ * DUPLICATE = ya estaba pagado por otro método; ON_CANCELLED / ON_FAILED = se pagó un cobro anulado
+ * o fallido; RECEIVABLE_ALREADY_PAID = la cuota ya estaba pagada; AMOUNT_MISMATCH = entró otro monto.
+ */
+export type PaymentExceptionReason =
+  | "DUPLICATE"
+  | "ON_CANCELLED"
+  | "ON_FAILED"
+  | "RECEIVABLE_ALREADY_PAID"
+  | "AMOUNT_MISMATCH";
+
+export type PaymentExceptionStatus = "OPEN" | "REFUNDED" | "APPLIED" | "DISMISSED";
+
+/** Un pago que entró pero no correspondía. El dinero ya está en tu saldo. */
+export interface PaymentException {
+  id: string;
+  merchantId: string;
+  livemode: boolean;
+  paymentIntentId: string;
+  paymentMethodType?: PaymentMethodType;
+  /** Lo que realmente entró. */
+  amount: Money;
+  reason: PaymentExceptionReason;
+  status: PaymentExceptionStatus;
+  balanceTransactionId?: string;
+  resolutionNote?: string;
+  createdAt: string;
+  resolvedAt?: string;
+}
+
+export interface ListPaymentExceptionsParams {
+  status?: PaymentExceptionStatus;
+  paymentIntentId?: string;
+  page?: number;
+  perPage?: number;
+}
+
+export interface PaymentExceptionList {
+  data: PaymentException[];
+  pagination: Pagination;
+}
+
+export interface ResolvePaymentExceptionParams {
+  /** REFUNDED = lo devolviste; APPLIED = lo aplicaste a otra deuda; DISMISSED = no requiere acción. */
+  status: Exclude<PaymentExceptionStatus, "OPEN">;
+  note?: string;
+}
+
+// ---------- Webhooks ----------
+
+export type WebhookDeliveryStatus = "PENDING" | "SUCCEEDED" | "FAILED" | "DEAD";
+
+export interface WebhookDeliveryAttempt {
+  id: string;
+  attemptNumber: number;
+  attemptedAt: string;
+  ok: boolean;
+  httpStatus?: number;
+  error?: string;
+  /** El JSON firmado que KUTI envió. */
+  requestBody?: string;
+  /** Lo que respondió tu servidor (truncado a 2 KB). */
+  responseBody?: string;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  eventId: string;
+  webhookEndpointId?: string;
+  endpointUrl?: string;
+  status: WebhookDeliveryStatus;
+  attempts: number;
+  lastHttpStatus?: number;
+  lastError?: string;
+  nextAttemptAt?: string;
+  deliveredAt?: string;
+  /** Del más reciente al más antiguo. */
+  attemptHistory: WebhookDeliveryAttempt[];
+}
+
+// ---------- Diagnóstico ----------
+
+export interface DiagnosticRequest {
+  id: string;
+  correlationId?: string;
+  livemode: boolean;
+  /** API = con API key; DASHBOARD = desde el panel. */
+  source: "API" | "DASHBOARD";
+  apiKeyId?: string;
+  method: string;
+  path: string;
+  route?: string;
+  resourceId?: string;
+  status: number;
+  errorCode?: string;
+  durationMs: number;
+  idempotencyKey?: string;
+  createdAt: string;
+}
+
+export interface DiagnosticWebhookDelivery {
+  id: string;
+  status: WebhookDeliveryStatus;
+  attempts: number;
+  lastHttpStatus?: number;
+  lastError?: string;
+  endpointUrl?: string;
+  lastAttemptAt?: string;
+}
+
+export interface DiagnosticEvent {
+  id: string;
+  type: string;
+  createdAt: string;
+  webhookDeliveries: DiagnosticWebhookDelivery[];
+}
+
+/** Qué pasó con una petición y qué causó. */
+export interface DiagnosticRequestDetail {
+  request: DiagnosticRequest;
+  events: DiagnosticEvent[];
+}
+
+export interface PaymentTraceEntry {
+  at?: string;
+  kind: "REQUEST" | "EVENT" | "WEBHOOK_DELIVERY" | "PAYMENT_REVIEW";
+  /** Frase corta, sin nombre de proveedor (ej. "POST /payment-intents → 201"). */
+  title: string;
+  requestId?: string;
+  eventId?: string;
+  deliveryId?: string;
+  httpStatus?: number;
+  errorCode?: string;
+}
+
+/** Historia de un cobro. Los métodos se muestran por tipo, nunca por proveedor. */
+export interface PaymentTrace {
+  paymentIntentId: string;
+  status: PaymentIntentStatus;
+  amount: Money;
+  cancellationReason?: string;
+  createdAt: string;
+  methods: { method: PaymentMethodType; status: string }[];
+  timeline: PaymentTraceEntry[];
 }

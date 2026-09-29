@@ -71,10 +71,10 @@ app.post("/webhooks/kuti", express.text({ type: "*/*" }), (req, res) => {
 
 ## Manejo de errores
 
-Todas las excepciones de la API extienden `KutiApiError` (`status`, `code`, `requestId`, `docUrl`, `details`). Hay subclases para los casos más comunes:
+Todas las excepciones de la API extienden `KutiApiError` (`status`, `code`, `requestId`, `correlationId`, `docUrl`, `details`). Hay subclases para los casos más comunes:
 
 ```ts
-import { KutiValidationError, KutiNotFoundError, KutiApiError } from "@kuti-pe/node";
+import { KutiValidationError, KutiNotFoundError, KutiPermissionError, KutiApiError } from "@kuti-pe/node";
 
 try {
   await kuti.checkoutSessions.create(params);
@@ -83,10 +83,24 @@ try {
     console.error(err.details); // [{ field: "amount.amount", code: "MUST_BE_POSITIVE", ... }]
   } else if (err instanceof KutiNotFoundError) {
     // ...
+  } else if (err instanceof KutiPermissionError) {
+    if (err.isInsufficientScope) {
+      // a la API key le falta el permiso de este endpoint (edítala en el panel o usa otra)
+    } else if (err.isDashboardOnly) {
+      // endpoint solo del panel de KUTI (p. ej. cambiar la cuenta bancaria): ninguna key puede usarlo
+    }
   } else if (err instanceof KutiApiError) {
     console.error(err.code, err.requestId); // úsalo al reportar un bug a soporte
   }
 }
+```
+
+¿Qué pasó con esa llamada? Con el `requestId` del error:
+
+```ts
+const diagnosis = await kuti.diagnostics.getRequest(err.requestId!);
+// diagnosis.request: método, ruta, status, errorCode, duración
+// diagnosis.events: eventos que causó y el resultado de cada webhook
 ```
 
 Los `GET` y los `POST` con `idempotencyKey` se reintentan automáticamente en errores de red o `429`/`503`. Un `POST` sin `idempotencyKey` nunca se reintenta, para no duplicar un cobro.
@@ -177,4 +191,7 @@ await kuti.paymentIntents.create({
 - `kuti.paymentIntents.cancel(id)`
 - `kuti.paymentIntents.sendWhatsApp(id, params?)`
 - `kuti.paymentLinks.create(params)` / `retrieve(id)` / `update(id, params)` / `list(params?)` / `activate(id)` / `deactivate(id)` / `checkSlug(slug, exceptId?)`
+- `kuti.paymentExceptions.list(params?)` / `resolve(id, { status, note })` — pagos para revisar (pagaron dos veces, un cobro anulado, otro monto…)
+- `kuti.webhookDeliveries.retrieve(id)` / `retry(id)` — cada intento con el status HTTP y lo que respondió tu servidor
+- `kuti.diagnostics.getRequest(requestId)` / `listByCorrelationId(id)` / `tracePaymentIntent(id)` — permiso `diagnostics:read` (ideal con una key de Solo lectura)
 - `verifyWebhookSignature(...)`

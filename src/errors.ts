@@ -9,6 +9,8 @@ export interface KutiApiErrorOptions {
   code: string;
   message: string;
   requestId?: string;
+  /** El `X-Request-Id` que enviaste (o el mismo requestId si no enviaste uno). */
+  correlationId?: string;
   docUrl?: string;
   details?: ErrorDetail[];
 }
@@ -17,7 +19,9 @@ export interface KutiApiErrorOptions {
 export class KutiApiError extends Error {
   readonly status: number;
   readonly code: string;
+  /** Pásalo a `client.diagnostics.getRequest(requestId)` para ver qué pasó. */
   readonly requestId?: string;
+  readonly correlationId?: string;
   readonly docUrl?: string;
   readonly details: ErrorDetail[];
 
@@ -27,6 +31,7 @@ export class KutiApiError extends Error {
     this.status = options.status;
     this.code = options.code;
     this.requestId = options.requestId;
+    this.correlationId = options.correlationId;
     this.docUrl = options.docUrl;
     this.details = options.details ?? [];
     Object.setPrototypeOf(this, new.target.prototype);
@@ -42,12 +47,27 @@ export class KutiAuthenticationError extends KutiApiError {
   }
 }
 
-/** 403 — la key es válida pero no tiene permiso para esta operación. */
+/**
+ * 403 — la key es válida pero no puede hacer esto. Revisa `code`:
+ * - `INSUFFICIENT_SCOPE`: a la key le falta el permiso (edítala o usa otra).
+ * - `API_KEY_NOT_ALLOWED`: el endpoint es solo del panel de KUTI (ninguna key puede usarlo).
+ * - `KYB_REQUIRED`: falta el sello KUTI habilitado para operar en producción.
+ */
 export class KutiPermissionError extends KutiApiError {
   constructor(options: KutiApiErrorOptions) {
     super(options);
     this.name = "KutiPermissionError";
     Object.setPrototypeOf(this, new.target.prototype);
+  }
+
+  /** A la API key le falta el permiso de este endpoint. */
+  get isInsufficientScope(): boolean {
+    return this.code === "INSUFFICIENT_SCOPE";
+  }
+
+  /** El endpoint es solo del panel: ninguna API key puede usarlo. */
+  get isDashboardOnly(): boolean {
+    return this.code === "API_KEY_NOT_ALLOWED";
   }
 }
 

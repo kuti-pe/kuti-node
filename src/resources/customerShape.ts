@@ -15,6 +15,7 @@ export interface CustomerDocumentApiShape {
 export interface CustomerApiShape {
   id: string;
   merchant_id: string;
+  code?: string | null;
   external_id?: string;
   type: Customer["type"];
   first_name?: string;
@@ -66,6 +67,7 @@ export function fromCustomerApiShape(dto: CustomerApiShape): Customer {
   return {
     id: dto.id,
     merchantId: dto.merchant_id,
+    code: dto.code ?? undefined,
     externalId: dto.external_id,
     type: dto.type,
     firstName: dto.first_name,
