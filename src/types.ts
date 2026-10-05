@@ -4,7 +4,8 @@ export interface Money {
   currency: "PEN" | string;
 }
 
-export type PaymentMethodType = "INTEROPERABLE_QR" | "BANK_TRANSFER";
+/** `YAPE` = Yape afiliado: el cliente aprueba una vez, queda guardado y se le debita. */
+export type PaymentMethodType = "INTEROPERABLE_QR" | "BANK_TRANSFER" | "YAPE";
 
 export type CheckoutSessionStatus = "OPEN" | "COMPLETED" | "EXPIRED" | "CANCELLED";
 
@@ -90,12 +91,189 @@ export interface CreatePaymentIntentParams {
    * [] = no enviar nada. WHATSAPP necesita teléfono del cliente (usa 1 moneda).
    */
   sendVia?: SendChannel[];
+  /**
+   * "enabled" = le vas a enviar este enlace a tu cliente: durante 30 minutos el checkout le muestra
+   * su Yape guardado para pagar con un toque. Requiere cliente y `YAPE` en `paymentMethodTypes`.
+   */
+  savedPaymentMethods?: "enabled" | "disabled";
+  /** Medio guardado del cliente a debitar (pm_…). Va junto con `confirm`. */
+  paymentMethod?: string;
+  /**
+   * true = crea el cobro y lo debita de inmediato al `paymentMethod`, sin el cliente presente.
+   * El resultado viene en `lastSavedMethodPayment`; si se deniega, el cobro queda abierto.
+   */
+  confirm?: boolean;
 }
 
 export type SendChannel = "EMAIL" | "WHATSAPP";
 
-/** Origen del cobro: a una persona, de un link de pago o de un cobro recurrente. */
-export type PaymentIntentSource = "single" | "link" | "recurring";
+/** Por qué no salió un débito sobre un medio guardado. */
+export type SavedMethodFailureCode =
+  | "insufficient_funds"
+  | "payment_method_revoked"
+  | "payment_method_required"
+  | "amount_exceeds_method_limit"
+  | "temporarily_unavailable";
+
+/** Resultado de debitar un cobro sobre un medio guardado. */
+export interface SavedMethodPayment {
+  status: "PROCESSING" | "SUCCEEDED" | "FAILED";
+  failureCode?: SavedMethodFailureCode | null;
+}
+
+/** Medio que el cliente dejó guardado en tu negocio (hoy, su Yape afiliado). */
+export interface SavedPaymentMethod {
+  id: string;
+  customerId?: string;
+  livemode?: boolean;
+  type: "YAPE" | string;
+  /** Últimos 4 dígitos del celular afiliado. */
+  phoneLast4?: string | null;
+  /** REVOKED = el cliente quitó la afiliación en su app; DETACHED = desvinculado desde KUTI. */
+  status: "ACTIVE" | "REVOKED" | "DETACHED";
+  statusReason?: string | null;
+  lastUsedAt?: string | null;
+  createdAt?: string;
+}
+
+/** Llave para que el checkout que incrustas muestre los medios guardados del cliente. */
+export interface CustomerSession {
+  /** Pásala a KUTI.js. Solo se muestra una vez; vale 30 minutos y solo para ese cobro. */
+  customerSessionSecret: string;
+  expiresAt?: string;
+}
+
+export type SubscriptionStatus = "INCOMPLETE" | "ACTIVE" | "PAST_DUE" | "PAUSED" | "CANCELLED" | "COMPLETED";
+
+export type SubscriptionFrequency = "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
+
+export interface SubscriptionItem {
+  description?: string;
+  /** Decimal string. */
+  unitAmount: string;
+  quantity?: number;
+  /** unitAmount × quantity. Solo en respuestas. */
+  amount?: string;
+}
+
+/** Qué hace KUTI cuando el débito de un periodo se deniega. */
+export interface SubscriptionRetryPolicy {
+  /** Días entre un intento y el siguiente. [] = no reintentar. Por defecto [1, 3, 5]. */
+  intervalDays?: number[];
+  /** Al agotarse: "past_due" (sigue esperando el pago) o "cancel". */
+  onExhausted?: "past_due" | "cancel";
+}
+
+/** Un periodo de la suscripción y su cobro. */
+export interface SubscriptionCycle {
+  id: string;
+  billingPeriod: string;
+  dueDate: string;
+  /** null mientras se espera el monto (AWAITING_AMOUNT). */
+  amount: Money | null;
+  status: "AWAITING_AMOUNT" | "OPEN" | "PROCESSING" | "PAID" | "UNCOLLECTIBLE" | "SKIPPED";
+  attempts: number;
+  lastFailureCode: SavedMethodFailureCode | null;
+  nextAttemptAt: string | null;
+  paymentIntentId: string | null;
+  /** Enlace para que el cliente pague este periodo; solo mientras está sin pagar. */
+  checkoutUrl: string | null;
+  paidAt: string | null;
+}
+
+export interface Subscription {
+  id: string;
+  merchantId: string;
+  livemode?: boolean;
+  customer?: { id: string; name?: string | null; email?: string | null; phone?: string | null };
+  description: string;
+  billingMode: "fixed" | "variable";
+  /** null en monto variable. */
+  amount: Money | null;
+  /** Monto variable e INCOMPLETE: enlace para que el cliente afilie su Yape sin pagar. */
+  setupUrl: string | null;
+  items: SubscriptionItem[];
+  frequency: SubscriptionFrequency;
+  interval: number;
+  dayOfMonth: number | null;
+  lastDayOfMonth: boolean;
+  dayOfWeek: number | null;
+  startDate: string;
+  endDate: string | null;
+  /** Hora de cobro, hora de Perú (HH:mm). */
+  chargeTime?: string;
+  nextChargeAt: string | null;
+  status: SubscriptionStatus;
+  paymentMethod: { id: string; type?: string; phoneLast4?: string | null; status?: string } | null;
+  retryPolicy?: SubscriptionRetryPolicy;
+  latestCycle: SubscriptionCycle | null;
+  externalReference: string | null;
+  metadata?: Record<string, string>;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CreateSubscriptionParams {
+  /** `{ id: "cus_…" }` o los datos del cliente (se reutiliza o se crea). */
+  customer: PaymentIntentCustomer;
+  description: string;
+  /** "variable" = tú envías el monto de cada periodo; no lleva `amount` ni `items`. */
+  billingMode?: "fixed" | "variable";
+  /** Total por periodo (máx. 2500.00). Atajo de una sola línea. */
+  amount?: string;
+  items?: SubscriptionItem[];
+  currency?: string;
+  frequency: SubscriptionFrequency;
+  interval?: number;
+  dayOfMonth?: number;
+  lastDayOfMonth?: boolean;
+  dayOfWeek?: number;
+  /** YYYY-MM-DD. Por defecto, hoy. */
+  startDate?: string;
+  endDate?: string;
+  /** HH:mm, hora de Perú. No puede caer entre 01:00 y 03:00. */
+  chargeTime?: string;
+  retryPolicy?: SubscriptionRetryPolicy;
+  externalReference?: string;
+  metadata?: Record<string, string>;
+  /** Por dónde se envía al cliente el enlace cuando tiene que afiliar. [] = lo envías tú. */
+  sendVia?: SendChannel[];
+}
+
+export interface UpdateSubscriptionParams {
+  description?: string;
+  amount?: string;
+  items?: SubscriptionItem[];
+  endDate?: string;
+  chargeTime?: string;
+  retryPolicy?: SubscriptionRetryPolicy;
+  metadata?: Record<string, string>;
+}
+
+export interface ListSubscriptionsParams {
+  status?: SubscriptionStatus;
+  customerId?: string;
+  page?: number;
+  perPage?: number | "all";
+}
+
+export interface SubscriptionList {
+  data: Subscription[];
+  pagination: Pagination;
+}
+
+export interface ChargeSubscriptionParams {
+  /** Total a cobrar en el periodo (máx. 2500.00). */
+  amount: string;
+  /** Lo que verá el cliente en este cobro. */
+  description?: string;
+  /** Periodo que se cobra. Sin enviarlo: el que espera monto o el periodo en curso. */
+  period?: string;
+}
+
+/** Origen del cobro: a una persona, de un link de pago o un periodo de una suscripción. */
+export type PaymentIntentSource = "single" | "link" | "subscription";
 
 export interface ListPaymentIntentsParams {
   status?: PaymentIntentStatus;
@@ -200,6 +378,10 @@ export interface PaymentIntent {
   paymentLinkId?: string | null;
   /** Canales por los que se envió el cobro al crearlo. */
   sendVia?: SendChannel[];
+  /** Si el checkout de este cobro puede mostrar el medio guardado del cliente sin pedirle un código. */
+  savedPaymentMethods?: { status: "enabled" | "disabled"; expiresAt?: string | null };
+  /** Solo al crear con `confirm: true`: cómo salió el débito. */
+  lastSavedMethodPayment?: SavedMethodPayment | null;
   createdAt: string;
 }
 

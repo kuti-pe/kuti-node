@@ -181,15 +181,102 @@ await kuti.paymentIntents.create({
 });
 ```
 
+## Yape afiliado y suscripciones
+
+> Por ahora solo en **modo prueba** (claves `kuti_test_…`). En producción estará disponible
+> cuando Yape afiliado quede habilitado para tu negocio.
+
+Con `YAPE` en `paymentMethodTypes`, tu cliente aprueba una sola vez desde su app y su Yape queda
+afiliado a tu negocio. Desde ahí puedes cobrarle sin que vuelva a aprobar.
+
+```ts
+// Qué tiene guardado el cliente
+const [yape] = await kuti.customers.listPaymentMethods("cus_…");
+
+// Cobrarle ahora, sin que esté presente
+const pi = await kuti.paymentIntents.create(
+  {
+    amount: { amount: "80.00", currency: "PEN" },
+    paymentMethodTypes: ["YAPE"],
+    customer: { id: "cus_…" },
+    description: "Pedido #1042",
+    sendVia: [],
+    paymentMethod: yape.id,
+    confirm: true,
+  },
+  { idempotencyKey: "pedido-1042" },
+);
+// pi.status === "SUCCEEDED", o pi.lastSavedMethodPayment.failureCode (p. ej. "insufficient_funds")
+// y el cobro queda abierto: su enlace (pi.checkoutUrl) sigue sirviendo.
+
+// Enviarle un enlace donde vea su Yape guardado y pague con un toque (vale 30 minutos)
+await kuti.paymentIntents.create({
+  amount: { amount: "120.00", currency: "PEN" },
+  paymentMethodTypes: ["YAPE", "INTEROPERABLE_QR"],
+  customer: { id: "cus_…" },
+  savedPaymentMethods: "enabled",
+});
+
+// Tienda con login propio que incrusta el checkout: la llave se la pasas a KUTI.js
+const { customerSessionSecret } = await kuti.paymentIntents.createCustomerSession(pi.id);
+```
+
+**Suscripción de monto fijo.** KUTI cobra solo cada periodo (máximo S/ 2,500).
+
+```ts
+const sub = await kuti.subscriptions.create({
+  customer: { id: "cus_…" },
+  description: "Plan Pro",
+  amount: "99.00",
+  frequency: "MONTHLY",
+  chargeTime: "09:00", // hora de Perú; nunca entre 01:00 y 03:00
+  retryPolicy: { intervalDays: [1, 3, 5], onExhausted: "past_due" }, // opcional
+  metadata: { workspace_id: "ws_4821" },
+});
+
+if (sub.status === "INCOMPLETE") {
+  // El cliente aún no tiene su Yape afiliado: debe afiliarlo y pagar el primer periodo aquí.
+  console.log(sub.latestCycle?.checkoutUrl);
+}
+```
+
+**Suscripción de monto variable** (por consumo). Al crearla no se cobra nada; se cobra a periodo
+vencido y tú envías el monto de cada periodo.
+
+```ts
+const sub = await kuti.subscriptions.create({
+  customer: { id: "cus_…" },
+  description: "LIA por consumo",
+  billingMode: "variable",
+  frequency: "MONTHLY",
+});
+// Si falta afiliar: sub.setupUrl (también se lo enviamos por correo).
+
+// Al recibir el webhook subscription.amount_required (o al cerrar tu periodo):
+await kuti.subscriptions.charge(
+  sub.id,
+  { amount: "184.00", description: "92 alumnos en octubre", period: "2026-10" },
+  { idempotencyKey: `consumo-${sub.id}-2026-10` },
+);
+```
+
+Eventos: `subscription.created`, `.activated`, `.payment_succeeded`, `.payment_failed`,
+`.amount_required`, `.period_skipped`, `.updated`, `.paused`, `.resumed`, `.cancelled`,
+`.completed`. El `data` es la suscripción completa; `latest_cycle` trae el motivo del fallo, el
+intento y cuándo se reintenta. KUTI no corta tu servicio: tú decides qué hacer con cada aviso.
+
 ## API
 
 - `kuti.customers.create(params)` / `retrieve(id)` / `update(id, params)` / `list(params?)` / `del(id)`
+- `kuti.customers.listPaymentMethods(id)` / `detachPaymentMethod(id, paymentMethodId)` — Yape afiliado del cliente
 - `kuti.checkoutSessions.create(params, opts?)` — Checkout.js
 - `kuti.paymentIntents.create(params, opts?)` — cobro directo
-- `kuti.paymentIntents.list(params?)` — filtros `status`, `q`, `customerId`, `source` (single | link | recurring), `paymentLinkId`
+- `kuti.paymentIntents.list(params?)` — filtros `status`, `q`, `customerId`, `source` (single | link | subscription), `paymentLinkId`
 - `kuti.paymentIntents.retrieve(id)`
 - `kuti.paymentIntents.cancel(id)`
 - `kuti.paymentIntents.sendWhatsApp(id, params?)`
+- `kuti.paymentIntents.enableSavedPaymentMethods(id)` / `createCustomerSession(id)` — mostrar el Yape guardado en el checkout
+- `kuti.subscriptions.create(params, opts?)` / `retrieve(id)` / `list(params?)` / `update(id, params)` / `pause(id)` / `resume(id)` / `cancel(id)` / `retry(id)` / `charge(id, params, opts?)` / `listCycles(id)`
 - `kuti.paymentLinks.create(params)` / `retrieve(id)` / `update(id, params)` / `list(params?)` / `activate(id)` / `deactivate(id)` / `checkSlug(slug, exceptId?)`
 - `kuti.paymentExceptions.list(params?)` / `resolve(id, { status, note })` — pagos para revisar (pagaron dos veces, un cobro anulado, otro monto…)
 - `kuti.webhookDeliveries.retrieve(id)` / `retry(id)` — cada intento con el status HTTP y lo que respondió tu servidor

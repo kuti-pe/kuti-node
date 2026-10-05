@@ -509,4 +509,137 @@ describe("KutiClient", () => {
 
     expect(customer.code).toBe("ZIZE00001");
   });
+
+  it("creates a subscription and maps its latest cycle", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(201, {
+        data: {
+          id: "sub_1",
+          merchant_id: "mer_1",
+          customer: { id: "cus_1", name: "María López" },
+          description: "Plan Pro",
+          billing_mode: "fixed",
+          amount: { amount: "99.00", currency: "PEN" },
+          items: [{ description: "Plan Pro", unit_amount: "99.00", quantity: 1, amount: "99.00" }],
+          frequency: "MONTHLY",
+          interval: 1,
+          start_date: "2026-10-05",
+          charge_time: "09:00",
+          status: "INCOMPLETE",
+          retry_policy: { interval_days: [1, 3, 5], on_exhausted: "past_due" },
+          latest_cycle: {
+            id: "subc_1",
+            billing_period: "2026-10",
+            due_date: "2026-10-05",
+            amount: { amount: "99.00", currency: "PEN" },
+            status: "OPEN",
+            attempts: 0,
+            last_failure_code: "payment_method_required",
+            payment_intent_id: "pi_1",
+            checkout_url: "https://pay.kuti.pe/c/ABC",
+          },
+          created_at: "2026-10-05T14:00:00Z",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new KutiClient({ secretKey: SECRET_KEY, baseUrl: "https://example.test/v1" });
+
+    const sub = await client.subscriptions.create(
+      {
+        customer: { id: "cus_1" },
+        description: "Plan Pro",
+        amount: "99.00",
+        frequency: "MONTHLY",
+        chargeTime: "09:00",
+        retryPolicy: { intervalDays: [1, 3, 5], onExhausted: "past_due" },
+      },
+      { idempotencyKey: "alta-1" },
+    );
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://example.test/v1/subscriptions");
+    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("alta-1");
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      customer: { id: "cus_1" },
+      charge_time: "09:00",
+      retry_policy: { interval_days: [1, 3, 5], on_exhausted: "past_due" },
+    });
+    expect(sub.status).toBe("INCOMPLETE");
+    expect(sub.billingMode).toBe("fixed");
+    expect(sub.retryPolicy?.intervalDays).toEqual([1, 3, 5]);
+    expect(sub.latestCycle).toMatchObject({
+      billingPeriod: "2026-10",
+      lastFailureCode: "payment_method_required",
+      checkoutUrl: "https://pay.kuti.pe/c/ABC",
+    });
+  });
+
+  it("sends the amount of a variable subscription period", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        data: {
+          id: "sub_1",
+          merchant_id: "mer_1",
+          description: "LIA por consumo",
+          billing_mode: "variable",
+          frequency: "MONTHLY",
+          interval: 1,
+          start_date: "2026-09-05",
+          status: "ACTIVE",
+          created_at: "2026-09-05T14:00:00Z",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new KutiClient({ secretKey: SECRET_KEY, baseUrl: "https://example.test/v1" });
+
+    const sub = await client.subscriptions.charge("sub_1", { amount: "184.00", period: "2026-10" });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://example.test/v1/subscriptions/sub_1/charges");
+    expect(JSON.parse(init.body as string)).toEqual({ amount: "184.00", period: "2026-10" });
+    expect(sub.billingMode).toBe("variable");
+    expect(sub.amount).toBeNull();
+  });
+
+  it("charges a saved payment method directly and lists the customer's saved methods", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          data: [{ id: "pm_1", type: "YAPE", status: "ACTIVE", display: { phone_last4: "2011" } }],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(201, {
+          data: {
+            id: "pi_1",
+            merchant_id: "mer_1",
+            amount: { amount: "80.00", currency: "PEN" },
+            status: "PENDING",
+            saved_payment_methods: { status: "disabled" },
+            last_saved_method_payment: { status: "FAILED", failure_code: "insufficient_funds" },
+            created_at: "2026-10-05T14:00:00Z",
+          },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new KutiClient({ secretKey: SECRET_KEY, baseUrl: "https://example.test/v1" });
+
+    const methods = await client.customers.listPaymentMethods("cus_1");
+    const pi = await client.paymentIntents.create({
+      amount: { amount: "80.00", currency: "PEN" },
+      paymentMethodTypes: ["YAPE"],
+      customer: { id: "cus_1" },
+      paymentMethod: methods[0]!.id,
+      confirm: true,
+    });
+
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://example.test/v1/customers/cus_1/payment-methods");
+    expect(methods[0]).toMatchObject({ id: "pm_1", phoneLast4: "2011", status: "ACTIVE" });
+    const body = JSON.parse((fetchMock.mock.calls[1]![1] as RequestInit).body as string);
+    expect(body).toMatchObject({ payment_method: "pm_1", confirm: true });
+    expect(pi.lastSavedMethodPayment).toEqual({ status: "FAILED", failureCode: "insufficient_funds" });
+  });
 });

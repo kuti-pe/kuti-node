@@ -6,6 +6,7 @@ import { PaymentLinksResource } from "./resources/paymentLinks.js";
 import { PaymentExceptionsResource } from "./resources/paymentExceptions.js";
 import { WebhookDeliveriesResource } from "./resources/webhookDeliveries.js";
 import { DiagnosticsResource } from "./resources/diagnostics.js";
+import { SubscriptionsResource } from "./resources/subscriptions.js";
 import type { RequestOptions } from "./types.js";
 
 const DEFAULT_BASE_URL = "https://api.kuti.pe/v1";
@@ -34,7 +35,7 @@ interface ApiErrorEnvelope {
 }
 
 /**
- * Cliente HTTP central de KUTI. Cuelgan de aquí los recursos (`checkoutSessions`, `customers`, `paymentIntents`, `paymentLinks`, `paymentExceptions`, `webhookDeliveries`, `diagnostics`);
+ * Cliente HTTP central de KUTI. Cuelgan de aquí los recursos (`checkoutSessions`, `customers`, `paymentIntents`, `paymentLinks`, `subscriptions`, `paymentExceptions`, `webhookDeliveries`, `diagnostics`);
  * este archivo solo resuelve auth, reintentos y mapeo de errores — cada recurso solo arma su propio
  * path/body.
  */
@@ -46,6 +47,7 @@ export class KutiClient {
   readonly customers: CustomersResource;
   readonly paymentIntents: PaymentIntentsResource;
   readonly paymentLinks: PaymentLinksResource;
+  readonly subscriptions: SubscriptionsResource;
   readonly paymentExceptions: PaymentExceptionsResource;
   readonly webhookDeliveries: WebhookDeliveriesResource;
   readonly diagnostics: DiagnosticsResource;
@@ -69,6 +71,7 @@ export class KutiClient {
     this.customers = new CustomersResource(this);
     this.paymentIntents = new PaymentIntentsResource(this);
     this.paymentLinks = new PaymentLinksResource(this);
+    this.subscriptions = new SubscriptionsResource(this);
     this.paymentExceptions = new PaymentExceptionsResource(this);
     this.webhookDeliveries = new WebhookDeliveriesResource(this);
     this.diagnostics = new DiagnosticsResource(this);

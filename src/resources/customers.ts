@@ -5,6 +5,7 @@ import type {
   CustomerList,
   DeleteCustomerResult,
   ListCustomersParams,
+  SavedPaymentMethod,
   UpdateCustomerParams,
 } from "../types.js";
 import {
@@ -25,6 +26,32 @@ interface CustomerPageEnvelope {
     total: number;
     total_pages: number;
     has_more: boolean;
+  };
+}
+
+interface SavedPaymentMethodApiShape {
+  id: string;
+  customer_id?: string;
+  livemode?: boolean;
+  type: string;
+  display?: { phone_last4?: string | null };
+  status: SavedPaymentMethod["status"];
+  status_reason?: string | null;
+  last_used_at?: string | null;
+  created_at?: string;
+}
+
+function fromSavedPaymentMethod(dto: SavedPaymentMethodApiShape): SavedPaymentMethod {
+  return {
+    id: dto.id,
+    customerId: dto.customer_id,
+    livemode: dto.livemode,
+    type: dto.type,
+    phoneLast4: dto.display?.phone_last4 ?? null,
+    status: dto.status,
+    statusReason: dto.status_reason ?? null,
+    lastUsedAt: dto.last_used_at ?? null,
+    createdAt: dto.created_at,
   };
 }
 
@@ -87,6 +114,24 @@ export class CustomersResource {
         hasMore: response.pagination.has_more,
       },
     };
+  }
+
+  /** GET /customers/:id/payment-methods — medios guardados (su Yape afiliado), sin los desvinculados. */
+  async listPaymentMethods(id: string): Promise<SavedPaymentMethod[]> {
+    const response = await this.client.request<{ data: SavedPaymentMethodApiShape[] }>(
+      "GET",
+      `/customers/${encodeURIComponent(id)}/payment-methods`,
+    );
+    return (response.data ?? []).map(fromSavedPaymentMethod);
+  }
+
+  /** DELETE /customers/:id/payment-methods/:pm — desvincula el medio: ya no se le puede cobrar. */
+  async detachPaymentMethod(id: string, paymentMethodId: string): Promise<SavedPaymentMethod> {
+    const response = await this.client.request<{ data: SavedPaymentMethodApiShape }>(
+      "DELETE",
+      `/customers/${encodeURIComponent(id)}/payment-methods/${encodeURIComponent(paymentMethodId)}`,
+    );
+    return fromSavedPaymentMethod(response.data);
   }
 
   /** DELETE /customers/:id — archived instead of deleted if it has payment intents. */

@@ -1,11 +1,13 @@
 import type { KutiClient } from "../client.js";
 import type {
   CreatePaymentIntentParams,
+  CustomerSession,
   ListPaymentIntentsParams,
   PaymentIntent,
   PaymentIntentList,
   PaymentMethodType,
   RequestOptions,
+  SavedMethodPayment,
   SendWhatsAppParams,
 } from "../types.js";
 import {
@@ -52,6 +54,8 @@ interface PaymentIntentApiShape {
   requires_customer_info?: boolean;
   payment_link_id?: string | null;
   send_via?: PaymentIntent["sendVia"];
+  saved_payment_methods?: { status: "enabled" | "disabled"; expires_at?: string | null };
+  last_saved_method_payment?: { status: SavedMethodPayment["status"]; failure_code?: string | null } | null;
   created_at: string;
 }
 
@@ -73,6 +77,9 @@ export class PaymentIntentsResource {
       merchant_id: params.merchantId,
       metadata: params.metadata,
       send_via: params.sendVia,
+      saved_payment_methods: params.savedPaymentMethods,
+      payment_method: params.paymentMethod,
+      confirm: params.confirm,
     };
 
     const response = await this.client.request<PaymentIntentEnvelope>(
@@ -129,6 +136,34 @@ export class PaymentIntentsResource {
       `/payment-intents/${encodeURIComponent(id)}/cancel`,
     );
     return fromApiShape(response.data);
+  }
+
+  /**
+   * POST /payment-intents/:id/saved-payment-methods/enable — durante 30 minutos el checkout de
+   * este cobro muestra el Yape guardado del cliente sin pedirle un código. Llámalo justo antes de
+   * enviarle el enlace. Volver a llamarlo renueva el plazo.
+   */
+  async enableSavedPaymentMethods(id: string): Promise<PaymentIntent> {
+    const response = await this.client.request<PaymentIntentEnvelope>(
+      "POST",
+      `/payment-intents/${encodeURIComponent(id)}/saved-payment-methods/enable`,
+    );
+    return fromApiShape(response.data);
+  }
+
+  /**
+   * POST /payment-intents/:id/customer-session — llave para el checkout que incrustas con
+   * KUTI.js: muestra el Yape guardado del cliente que ya inició sesión en tu tienda. No va en el
+   * enlace del cobro.
+   */
+  async createCustomerSession(id: string): Promise<CustomerSession> {
+    const response = await this.client.request<{
+      data: { customer_session_secret: string; expires_at?: string };
+    }>("POST", `/payment-intents/${encodeURIComponent(id)}/customer-session`);
+    return {
+      customerSessionSecret: response.data.customer_session_secret,
+      expiresAt: response.data.expires_at,
+    };
   }
 
   /** POST /payment-intents/:id/send-whatsapp — 204 on success. */
@@ -189,6 +224,15 @@ function fromApiShape(dto: PaymentIntentApiShape): PaymentIntent {
     requiresCustomerInfo: dto.requires_customer_info,
     paymentLinkId: dto.payment_link_id,
     sendVia: dto.send_via,
+    savedPaymentMethods: dto.saved_payment_methods
+      ? { status: dto.saved_payment_methods.status, expiresAt: dto.saved_payment_methods.expires_at }
+      : undefined,
+    lastSavedMethodPayment: dto.last_saved_method_payment
+      ? {
+          status: dto.last_saved_method_payment.status,
+          failureCode: dto.last_saved_method_payment.failure_code as SavedMethodPayment["failureCode"],
+        }
+      : undefined,
     createdAt: dto.created_at,
   };
 }
