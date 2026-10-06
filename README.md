@@ -183,8 +183,8 @@ await kuti.paymentIntents.create({
 
 ## Yape afiliado y suscripciones
 
-> Por ahora solo en **modo prueba** (claves `kuti_test_…`). En producción estará disponible
-> cuando Yape afiliado quede habilitado para tu negocio.
+> Disponible en producción próximamente. Ya puedes integrarlo y probarlo con una clave de prueba
+> (`kuti_test_…`).
 
 Con `YAPE` en `paymentMethodTypes`, tu cliente aprueba una sola vez desde su app y su Yape queda
 afiliado a tu negocio. Desde ahí puedes cobrarle sin que vuelva a aprobar.
@@ -224,15 +224,18 @@ const { customerSessionSecret } = await kuti.paymentIntents.createCustomerSessio
 **Suscripción de monto fijo.** KUTI cobra solo cada periodo (máximo S/ 2,500).
 
 ```ts
-const sub = await kuti.subscriptions.create({
-  customer: { id: "cus_…" },
-  description: "Plan Pro",
-  amount: "99.00",
-  frequency: "MONTHLY",
-  chargeTime: "09:00", // hora de Perú; nunca entre 01:00 y 03:00
-  retryPolicy: { intervalDays: [1, 3, 5], onExhausted: "past_due" }, // opcional
-  metadata: { workspace_id: "ws_4821" },
-});
+const sub = await kuti.subscriptions.create(
+  {
+    customer: { id: "cus_…" },
+    description: "Plan Pro",
+    amount: "99.00",
+    frequency: "MONTHLY",
+    chargeTime: "09:00", // hora de Perú; nunca entre 01:00 y 03:00
+    retryPolicy: { intervalDays: [1, 3, 5], onExhausted: "past_due" }, // opcional
+    metadata: { workspace_id: "ws_4821" },
+  },
+  { idempotencyKey: `sub-plan-${customerId}` },
+);
 
 if (sub.status === "INCOMPLETE") {
   // El cliente aún no tiene su Yape afiliado: debe afiliarlo y pagar el primer periodo aquí.
@@ -276,7 +279,7 @@ intento y cuándo se reintenta. KUTI no corta tu servicio: tú decides qué hace
 - `kuti.paymentIntents.cancel(id)`
 - `kuti.paymentIntents.sendWhatsApp(id, params?)`
 - `kuti.paymentIntents.enableSavedPaymentMethods(id)` / `createCustomerSession(id)` — mostrar el Yape guardado en el checkout
-- `kuti.subscriptions.create(params, opts?)` / `retrieve(id)` / `list(params?)` / `update(id, params)` / `pause(id)` / `resume(id)` / `cancel(id)` / `retry(id)` / `charge(id, params, opts?)` / `listCycles(id)`
+- `kuti.subscriptions.create(params, opts?)` / `retrieve(id)` / `list(params?)` / `update(id, params)` / `pause(id, opts?)` / `resume(id, opts?)` / `cancel(id, opts?)` / `retry(id, opts?)` / `charge(id, params, opts?)` / `listCycles(id)`
 - `kuti.paymentLinks.create(params)` / `retrieve(id)` / `update(id, params)` / `list(params?)` / `activate(id)` / `deactivate(id)` / `checkSlug(slug, exceptId?)`
 - `kuti.paymentExceptions.list(params?)` / `resolve(id, { status, note })` — pagos para revisar (pagaron dos veces, un cobro anulado, otro monto…)
 - `kuti.webhookDeliveries.retrieve(id)` / `retry(id)` — cada intento con el status HTTP y lo que respondió tu servidor

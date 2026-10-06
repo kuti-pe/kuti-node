@@ -148,23 +148,23 @@ export class SubscriptionsResource {
   }
 
   /** POST /subscriptions/:id/pause — deja de cobrar y de reintentar. */
-  pause(id: string): Promise<Subscription> {
-    return this.action(id, "pause");
+  pause(id: string, opts?: RequestOptions): Promise<Subscription> {
+    return this.action(id, "pause", opts);
   }
 
   /** POST /subscriptions/:id/resume */
-  resume(id: string): Promise<Subscription> {
-    return this.action(id, "resume");
+  resume(id: string, opts?: RequestOptions): Promise<Subscription> {
+    return this.action(id, "resume", opts);
   }
 
   /** POST /subscriptions/:id/cancel — final; anula el cobro del periodo que siga sin pagar. */
-  cancel(id: string): Promise<Subscription> {
-    return this.action(id, "cancel");
+  cancel(id: string, opts?: RequestOptions): Promise<Subscription> {
+    return this.action(id, "cancel", opts);
   }
 
   /** POST /subscriptions/:id/retry — debita ahora el periodo más antiguo sin pagar. */
-  retry(id: string): Promise<Subscription> {
-    return this.action(id, "retry");
+  retry(id: string, opts?: RequestOptions): Promise<Subscription> {
+    return this.action(id, "retry", opts);
   }
 
   /**
@@ -188,8 +188,13 @@ export class SubscriptionsResource {
     return (response.data ?? []).map(fromCycle);
   }
 
-  private async action(id: string, action: string): Promise<Subscription> {
-    const response = await this.client.request<SubscriptionEnvelope>("POST", `${path(id)}/${action}`);
+  private async action(id: string, action: string, opts?: RequestOptions): Promise<Subscription> {
+    const response = await this.client.request<SubscriptionEnvelope>(
+      "POST",
+      `${path(id)}/${action}`,
+      undefined,
+      opts,
+    );
     return fromApiShape(response.data);
   }
 }

@@ -603,6 +603,31 @@ describe("KutiClient", () => {
     expect(sub.amount).toBeNull();
   });
 
+  it("sends Idempotency-Key on subscription retry", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        data: {
+          id: "sub_1",
+          merchant_id: "mer_1",
+          description: "Plan Pro",
+          frequency: "MONTHLY",
+          interval: 1,
+          start_date: "2026-10-05",
+          status: "ACTIVE",
+          created_at: "2026-10-05T14:00:00Z",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new KutiClient({ secretKey: SECRET_KEY, baseUrl: "https://example.test/v1" });
+
+    await client.subscriptions.retry("sub_1", { idempotencyKey: "retry-1" });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://example.test/v1/subscriptions/sub_1/retry");
+    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("retry-1");
+  });
+
   it("charges a saved payment method directly and lists the customer's saved methods", async () => {
     const fetchMock = vi
       .fn()
