@@ -166,8 +166,11 @@ export class PaymentIntentsResource {
     };
   }
 
-  /** POST /payment-intents/:id/send-whatsapp — 204 on success. */
-  async sendWhatsApp(id: string, params: SendWhatsAppParams = {}): Promise<void> {
+  /**
+   * POST /payment-intents/:id/send-whatsapp — 204 on success. Con `idempotencyKey`, reintentar no
+   * le manda el mensaje dos veces al cliente.
+   */
+  async sendWhatsApp(id: string, params: SendWhatsAppParams = {}, opts?: RequestOptions): Promise<void> {
     const body: Record<string, string> = {};
     if (params.phone) body.phone = params.phone;
     if (params.customerName) body.customer_name = params.customerName;
@@ -175,6 +178,7 @@ export class PaymentIntentsResource {
       "POST",
       `/payment-intents/${encodeURIComponent(id)}/send-whatsapp`,
       Object.keys(body).length ? body : {},
+      opts,
     );
   }
 }

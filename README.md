@@ -105,6 +105,17 @@ const diagnosis = await kuti.diagnostics.getRequest(err.requestId!);
 
 Los `GET` y los `POST` con `idempotencyKey` se reintentan automáticamente en errores de red o `429`/`503`. Un `POST` sin `idempotencyKey` nunca se reintenta, para no duplicar un cobro.
 
+Aceptan `{ idempotencyKey }` como último argumento: `paymentIntents.create`, `paymentIntents.sendWhatsApp`, `checkoutSessions.create`, `customers.create`, `paymentLinks.create`, `webhookDeliveries.retry` y `subscriptions.create | charge | retry | pause | resume | cancel`. Con la misma llave y el mismo contenido recibes la respuesta original y nada se hace dos veces; la misma llave con otro contenido responde `409 IDEMPOTENCY_CONFLICT`.
+
+```ts
+// Un reintento no crea otro cliente ni le manda el mensaje dos veces.
+const customer = await kuti.customers.create(
+  { type: "INDIVIDUAL", firstName: "Ana", lastName: "Rojas" },
+  { idempotencyKey: `alta-${userId}` },
+);
+await kuti.paymentIntents.sendWhatsApp(pi.id, {}, { idempotencyKey: `wa-${pi.id}` });
+```
+
 ## Clientes y campos personalizados
 
 El cliente tiene la **misma forma** en `customers.create`, en el `customer` de un cobro y en el de

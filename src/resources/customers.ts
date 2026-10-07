@@ -5,6 +5,7 @@ import type {
   CustomerList,
   DeleteCustomerResult,
   ListCustomersParams,
+  RequestOptions,
   SavedPaymentMethod,
   UpdateCustomerParams,
 } from "../types.js";
@@ -58,10 +59,13 @@ function fromSavedPaymentMethod(dto: SavedPaymentMethodApiShape): SavedPaymentMe
 export class CustomersResource {
   constructor(private readonly client: KutiClient) {}
 
-  /** POST /customers — 409 CUSTOMER_ALREADY_EXISTS if the externalId or document already exists. */
-  async create(params: CreateCustomerParams): Promise<Customer> {
+  /**
+   * POST /customers — 409 CUSTOMER_ALREADY_EXISTS if the externalId or document already exists.
+   * Con `idempotencyKey`, reintentar no crea otro cliente.
+   */
+  async create(params: CreateCustomerParams, opts?: RequestOptions): Promise<Customer> {
     const body = { ...toCustomerBody(params), metadata: params.metadata };
-    const response = await this.client.request<CustomerEnvelope>("POST", "/customers", body);
+    const response = await this.client.request<CustomerEnvelope>("POST", "/customers", body, opts);
     return fromCustomerApiShape(response.data);
   }
 

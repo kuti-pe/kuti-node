@@ -667,4 +667,78 @@ describe("KutiClient", () => {
     expect(body).toMatchObject({ payment_method: "pm_1", confirm: true });
     expect(pi.lastSavedMethodPayment).toEqual({ status: "FAILED", failureCode: "insufficient_funds" });
   });
+
+  it("sends Idempotency-Key when creating customers and payment links, sending WhatsApp and retrying deliveries", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(201, {
+          data: { id: "cus_1", merchant_id: "mer_1", type: "INDIVIDUAL", first_name: "Ana", created_at: "2026-01-01T00:00:00Z" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(201, {
+          data: {
+            id: "plink_1",
+            merchant_id: "mer_1",
+            livemode: false,
+            slug: "taller-excel",
+            url: "https://pay.kuti.pe/l/taller-excel",
+            title: "Taller de Excel",
+            template: "COURSE",
+            pricing: "FIXED",
+            currency: "PEN",
+            amount: "120.00",
+            suggested_amounts: [],
+            payment_method_types: ["INTEROPERABLE_QR"],
+            status: "ACTIVE",
+            customer_fields: [],
+            payments_count: 0,
+            views_count: 0,
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, { data: { id: "whd_1", event_id: "evt_1", status: "PENDING", attempts: 1 } }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new KutiClient({ secretKey: SECRET_KEY, baseUrl: "https://example.test/v1" });
+
+    await client.customers.create({ type: "INDIVIDUAL", firstName: "Ana" }, { idempotencyKey: "alta-ana" });
+    await client.paymentLinks.create(
+      { title: "Taller de Excel", pricing: "FIXED", amount: "120.00", paymentMethodTypes: ["INTEROPERABLE_QR"] },
+      { idempotencyKey: "link-taller" },
+    );
+    await client.paymentIntents.sendWhatsApp("pi_1", { phone: "+51987654321" }, { idempotencyKey: "wa-pi_1" });
+    await client.webhookDeliveries.retry("whd_1", { idempotencyKey: "retry-whd_1" });
+
+    const sent = fetchMock.mock.calls.map(([url, init]) => [
+      url as string,
+      ((init as RequestInit).headers as Record<string, string>)["Idempotency-Key"],
+    ]);
+    expect(sent).toEqual([
+      ["https://example.test/v1/customers", "alta-ana"],
+      ["https://example.test/v1/payment-links", "link-taller"],
+      ["https://example.test/v1/payment-intents/pi_1/send-whatsapp", "wa-pi_1"],
+      ["https://example.test/v1/webhook-deliveries/whd_1/retry", "retry-whd_1"],
+    ]);
+  });
+
+  it("sends no Idempotency-Key when the caller does not give one", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(201, {
+        data: { id: "cus_1", merchant_id: "mer_1", type: "INDIVIDUAL", first_name: "Ana", created_at: "2026-01-01T00:00:00Z" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new KutiClient({ secretKey: SECRET_KEY, baseUrl: "https://example.test/v1" });
+
+    await client.customers.create({ type: "INDIVIDUAL", firstName: "Ana" });
+
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
+    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBeUndefined();
+  });
 });

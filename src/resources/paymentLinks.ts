@@ -4,6 +4,7 @@ import type {
   PaymentLink,
   PaymentLinkList,
   PaymentLinkParams,
+  RequestOptions,
   SlugAvailability,
 } from "../types.js";
 
@@ -64,9 +65,14 @@ interface PaymentLinkPageEnvelope {
 export class PaymentLinksResource {
   constructor(private readonly client: KutiClient) {}
 
-  /** POST /payment-links */
-  async create(params: PaymentLinkParams): Promise<PaymentLink> {
-    const response = await this.client.request<PaymentLinkEnvelope>("POST", "/payment-links", toBody(params));
+  /** POST /payment-links. Con `idempotencyKey`, reintentar devuelve el link ya creado. */
+  async create(params: PaymentLinkParams, opts?: RequestOptions): Promise<PaymentLink> {
+    const response = await this.client.request<PaymentLinkEnvelope>(
+      "POST",
+      "/payment-links",
+      toBody(params),
+      opts,
+    );
     return fromApiShape(response.data);
   }
 

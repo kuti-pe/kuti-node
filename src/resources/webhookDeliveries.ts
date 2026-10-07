@@ -1,5 +1,5 @@
 import type { KutiClient } from "../client.js";
-import type { WebhookDelivery } from "../types.js";
+import type { RequestOptions, WebhookDelivery } from "../types.js";
 
 export interface WebhookDeliveryApiShape {
   id: string;
@@ -38,10 +38,12 @@ export class WebhookDeliveriesResource {
   }
 
   /** POST /webhook-deliveries/:id/retry — la reencola para envío inmediato. */
-  async retry(id: string): Promise<WebhookDelivery> {
+  async retry(id: string, opts?: RequestOptions): Promise<WebhookDelivery> {
     const response = await this.client.request<{ data: WebhookDeliveryApiShape }>(
       "POST",
       `/webhook-deliveries/${encodeURIComponent(id)}/retry`,
+      undefined,
+      opts,
     );
     return fromWebhookDeliveryApiShape(response.data);
   }
